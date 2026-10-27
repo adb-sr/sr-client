@@ -15,8 +15,8 @@ from sr_client import SRClient, area_around
 sr = SRClient("srk_...", url="https://<service-url>")   # or set SR_API_KEY / SR_API_URL
 area = area_around(14.5995, 120.9842, km=2)             # or a bbox [W, S, E, N] or GeoJSON
 
-sr.estimate(area, "2025-12-01")       # tiles, cost, scenes found, likely warnings (free)
-job = sr.submit(area, "2025-12-01")   # stages 1 + 2 by default
+sr.estimate(area, "2026-04-15")       # tiles, cost, scenes found, likely warnings (free)
+job = sr.submit(area, "2026-04-15")   # stages 1 + 2 by default
 job.wait()                            # prints progress; stage 1 is published early
 job.show()                            # RGB previews       (needs [viz])
 sr2 = job.open("stage2_sr.tif")       # xarray, reflectance (needs [geo])

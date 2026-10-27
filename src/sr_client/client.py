@@ -16,12 +16,20 @@ FINISHED = ("done", "partial", "failed", "cancelled")
 
 
 class SRError(Exception):
-    """The service refused a request (``status`` is the HTTP status) or a job failed."""
+    """The service refused a request; ``status`` is the HTTP status."""
 
     def __init__(self, status: int, message: str) -> None:
-        super().__init__(f"[{status}] {message}" if status else message)
+        super().__init__(f"[{status}] {message}")
         self.status = status
         self.message = message
+
+
+class JobFailed(Exception):
+    """A job ended ``failed`` or ``cancelled`` (or ``wait`` timed out); ``job`` has details."""
+
+    def __init__(self, job: Job, message: str) -> None:
+        super().__init__(message)
+        self.job = job
 
 
 def area_around(lat: float, lon: float, km: float = 2.0) -> list[float]:
@@ -61,7 +69,8 @@ def _detail(resp: httpx.Response) -> str:
 class SRClient:
     """``SRClient(key, url)``; both default to $SR_API_KEY and $SR_API_URL.
 
-    ``http`` replaces the HTTP client (tests pass an in-process one).
+    ``http`` replaces the HTTP client (tests pass an in-process one). Use it as a context
+    manager, or call ``close()``, to release its connections.
     """
 
     def __init__(self, key: str | None = None, url: str | None = None, *,
@@ -81,6 +90,16 @@ class SRClient:
         # Result links are presigned: they must be fetched without the API key.
         self._files = httpx.Client(timeout=timeout, follow_redirects=True,
                                    transport=httpx.HTTPTransport(retries=3))
+
+    def close(self) -> None:
+        self._http.close()
+        self._files.close()
+
+    def __enter__(self) -> SRClient:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
     def _call(self, method: str, path: str, **kw) -> dict[str, Any]:
         resp = self._http.request(method, path, headers=self._auth, **kw)
@@ -146,8 +165,9 @@ class Job:
         return self
 
     def wait(self, poll_s: float = 10, timeout_s: float = 3 * 3600, quiet: bool = False) -> Job:
-        """Poll until the job finishes; prints progress unless ``quiet``. Raises SRError if it
-        failed or was cancelled; a ``partial`` job returns (check ``warnings``)."""
+        """Poll until the job finishes; prints progress unless ``quiet``. Raises JobFailed if
+        it failed, was cancelled or timed out; a ``partial`` job returns (check
+        ``warnings``)."""
         t0 = time.monotonic()
         while True:
             self.refresh()
@@ -156,14 +176,15 @@ class Job:
             if self.status in FINISHED:
                 break
             if time.monotonic() - t0 > timeout_s:
-                raise SRError(0, f"job {self.id} still {self.status} after {timeout_s:.0f} s")
+                raise JobFailed(self, f"job {self.id} still {self.status} after "
+                                      f"{timeout_s:.0f} s")
             time.sleep(poll_s)
         if not quiet:
             print()
             for w in self.warnings:
                 print(f"warning [{w['code']}]: {w['message']}", file=sys.stderr)
         if self.status in ("failed", "cancelled"):
-            raise SRError(0, f"job {self.id} {self.status}: {self.info.get('error')}")
+            raise JobFailed(self, f"job {self.id} {self.status}: {self.info.get('error')}")
         return self
 
     def _progress_line(self, elapsed: float) -> str:
@@ -215,6 +236,9 @@ class Job:
 
         links = self.results()["files"]
         previews = [n for n in ("stage1_preview.png", "stage2_preview.png") if n in links]
+        if not previews:
+            print(f"job {self.id} has no previews yet (status {self.status})")
+            return
         fig, axes = plt.subplots(1, len(previews), figsize=figsize, squeeze=False)
         for ax, name in zip(axes[0], previews):
             img = Image.open(io.BytesIO(self._client._files.get(links[name]).content))

@@ -9,7 +9,7 @@
     paths = job.download()
 """
 
-from .client import Job, SRClient, SRError, area_around
+from .client import Job, JobFailed, SRClient, SRError, area_around
 
-__all__ = ["Job", "SRClient", "SRError", "area_around"]
+__all__ = ["Job", "JobFailed", "SRClient", "SRError", "area_around"]
 __version__ = "0.1.0"

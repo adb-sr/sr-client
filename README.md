@@ -35,7 +35,7 @@ Each job writes these files, kept for 30 days. Download links last 7 days, and c
 | `stage1_sr.tif` | Stage 1 (multi-image SR): RGBN, 2.5 m, uint16 reflectance × 10000, nodata 0 |
 | `stage2_sr.tif` | Stage 2 (diffusion refinement), same layout |
 | `lr_reference.tif` | The 10 m Sentinel-2 input composite on the same grid |
-| `validity.tif` | 0 nodata · 1 valid · 2 low-diversity (fewer than 8 distinct clear scenes) |
+| `validity.tif` | 0 nodata · 1 valid · 2 low-diversity (fewer than 4 distinct clear scenes) |
 | `stage*_preview.png` | RGB previews |
 | `manifest.json` | Scenes used per tile, parameters, model versions, cost, warnings, attribution |
 

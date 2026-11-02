@@ -23,7 +23,16 @@ sr2 = job.open("stage2_sr.tif")       # xarray, reflectance (needs [geo])
 job.download("results/")              # every file, under results/<job id>/
 ```
 
-A [Colab notebook](notebooks/workshop.ipynb) walks through the whole thing.
+A [Colab notebook](notebooks/workshop.ipynb) walks through the whole thing. Two more notebooks
+go with the SSTA workshop sessions:
+
+- [`demo1_super_resolution.ipynb`](notebooks/demo1_super_resolution.ipynb): the process step by
+  step: scene search, the 8 inputs, stage 1, stage 2, the two dials (`tau`, `nfe`), what the
+  model invents (seeds), NIR/NDVI, quality flags.
+- [`demo2_use_cases.ipynb`](notebooks/demo2_use_cases.ipynb): from images to maps: a land-cover
+  model trained on real high-resolution images, scored against Open Buildings and
+  OpenStreetMap on Sentinel-2, stage 1 and stage 2; planning numbers; a model you train
+  yourself (the hackathon template).
 
 ## What you get
 

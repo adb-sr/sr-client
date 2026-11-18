@@ -23,16 +23,24 @@ sr2 = job.open("stage2_sr.tif")       # xarray, reflectance (needs [geo])
 job.download("results/")              # every file, under results/<job id>/
 ```
 
-A [Colab notebook](notebooks/workshop.ipynb) walks through the whole thing. Two more notebooks
+A [Colab notebook](notebooks/workshop.ipynb) walks through the whole thing. Three more notebooks
 go with the SSTA workshop sessions:
 
-- [`demo1_super_resolution.ipynb`](notebooks/demo1_super_resolution.ipynb): the process step by
-  step: scene search, the 8 inputs, stage 1, stage 2, the two dials (`tau`, `nfe`), what the
-  model invents (seeds), NIR/NDVI, quality flags.
-- [`demo2_use_cases.ipynb`](notebooks/demo2_use_cases.ipynb): from images to maps: a land-cover
-  model trained on real high-resolution images, scored against Open Buildings and
-  OpenStreetMap on Sentinel-2, stage 1 and stage 2; planning numbers; a model you train
-  yourself (the hackathon template).
+- [`demo1_super_resolution.ipynb`](notebooks/demo1_super_resolution.ipynb): the presenter's
+  walkthrough. Part A: scene search, sending a job and its options, the 8 inputs, stage 1,
+  stage 2, files and quality flags. Part B: the two dials (`tau`, `nfe`), what the model
+  invents (seeds), NIR/NDVI, a check against real 1 m images.
+- [`demo1_your_turn.ipynb`](notebooks/demo1_your_turn.ipynb): the participants' worksheet.
+  Pick one of five places, look at the inputs and both stages, run one dial experiment, and
+  answer four questions (about 20 minutes, no coding).
+- [`demo2_use_cases.ipynb`](notebooks/demo2_use_cases.ipynb): from images to maps, for the
+  same five places. A land-cover model trained on real high-resolution images was run on
+  Sentinel-2, stage 1 and stage 2 before the workshop; participants score the maps against
+  Open Buildings and OpenStreetMap, look for rescues and failures, and use the map for a
+  decision. Needs no key and no GPU.
+
+The notebooks are generated: edit `tools/demos/` (`places.py`, the helper files and the
+`build_*.py` scripts) and rebuild, do not edit the `.ipynb` files.
 
 ## What you get
 

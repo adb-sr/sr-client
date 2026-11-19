@@ -41,7 +41,7 @@ This notebook stays online if you want to go through it later.
 
 1. **Search**: which Sentinel-2 images exist for an area and a date? (free)
 2. **Send a job**, and the options you can set.
-3. **The inputs and Stage 1**: 8 images combined into one 2.5 m image.
+3. **The inputs and Stage 1**: 8 images combined into one 2.5 m image, tile by tile.
 4. **Stage 2**: the diffusion step adds detail.
 5. **What comes with every result**: files, quality flags, sources and cost.
 
@@ -184,36 +184,42 @@ md(r"""
 As soon as stage 1 is ready, the job's manifest lists which Sentinel-2 images were used for
 each tile. Below, each dot is one image that the search found. The height of a dot is **how
 much of our area is under cloud or cloud shadow in that image**, according to ESA's scene
-classification. The filled dots were used; the grey ones were too cloudy over this area or
-not needed.
+classification. Blue dots were used, and **the larger the dot, the more of the area it was
+used for**. Grey rings were not used.
 
-The search in section 1 can only filter on the cloud cover of the whole Sentinel-2 tile
-(110 km across), which says little about a 2 km area. So the service then looks at each
-image over each 320 m tile and keeps the clearest ones closest to the date. That is why an
-image that is mostly cloudy over the area can still be used: for the tiles where it is clear.
+**Why are some images with a lot of cloud used?** The model does not work on the whole area
+at once but on tiles of 320 m (more on this below), and the images are chosen for each tile
+separately. An image that is cloudy over most of the area can still be clear over a few
+tiles, and it is used only there: its dot is small.
 
-(Cebu lies where two Sentinel-2 tiles overlap, so most satellite passes were found twice.
-Their dots lie on top of each other, and the service uses one copy.)
+(The search in section 1 filters on the cloud cover of the whole Sentinel-2 tile, 110 km
+across. That number says little about a 2 km area, so we do not plot it here. Cebu also
+lies where two Sentinel-2 tiles overlap, so most satellite passes were found twice; their
+dots lie on top of each other.)
 """)
 code(r"""
 wait_for_stage(job, "1")
 m = manifest(job)
 
 target = date.fromisoformat(DATE)
-used = set(m["scenes"])
 cloudy = cloud_over_area([s["id"] for s in est["scenes"]], area)   # read from the archive
+n_tiles = {s["id"]: sum(s["id"] in t["scene_ids"] for t in m["tiles"]) for s in est["scenes"]}
 
-fig, ax = plt.subplots(figsize=(10, 3.2))
+fig, ax = plt.subplots(figsize=(10, 3.4))
 for s in est["scenes"]:
     d = (date.fromisoformat(s["date"][:10]) - target).days
-    ax.scatter(d, 100 * cloudy[s["id"]], s=60,
-               color="#007DB7" if s["id"] in used else "none",
-               edgecolors="#007DB7" if s["id"] in used else "grey")
+    share = n_tiles[s["id"]] / len(m["tiles"])
+    if share:
+        ax.scatter(d, 100 * cloudy[s["id"]], s=20 + 160 * share, color="#007DB7", alpha=0.85,
+                   zorder=3)
+    else:
+        ax.scatter(d, 100 * cloudy[s["id"]], s=60, color="none", edgecolors="grey", zorder=2)
 ax.axvline(0, color="k", ls=":")
-ax.set_ylim(-5, 105)
+ax.set_ylim(-8, 105)
 ax.set_xlabel(f"days from {DATE}")
 ax.set_ylabel("cloud and shadow\nover our area (%)")
-ax.set_title(f"{len(est['scenes'])} images found, {len(used)} used (filled)")
+ax.set_title(f"{len(est['scenes'])} images found, {sum(v > 0 for v in n_tiles.values())} used "
+             f"(blue; larger = used for more of the {len(m['tiles'])} tiles)")
 plt.show()
 """)
 
@@ -265,20 +271,24 @@ show([clip(lr, LAT, LON, 0.6), clip(s1, LAT, LON, 0.6)],
 """)
 
 md(r"""
-**Stage 1 adds nothing that is not in the images.** One way to check: average each 4 × 4
-block of Stage 1 back to one 10 m pixel. If Stage 1 only rearranges what the satellite
-measured, this should look like the Sentinel-2 input again.
+### From tiles to one image
 
-The agreement number is a correlation: 1 means the same pattern of light and dark at 10 m.
-Expect a high but not perfect value: on our test areas it was 0.83 to 0.93 over cities and
-0.74 to 0.77 over farmland. The Sentinel-2 input here is the average of 8 dates, and
-Stage 1 makes one sharp image from them; fields that change between the dates probably
-explain most of the gap over farmland.
+The model always works on squares of **320 m** (32 Sentinel-2 pixels). A larger area is cut
+into such tiles, and each tile goes through the model on its own, with its own 8 images.
+The service then **stitches** the results into one image:
+
+* neighbouring tiles **overlap by 80 m**. In the overlap, one result fades into the other,
+  so there is no hard edge;
+* the **colours of neighbouring tiles are matched**, because two tiles may have used
+  different images;
+* a tile with no clear image at all stays empty: such gaps appear as black squares.
+
+On the left, the outlines of all tiles on the Stage 1 image, with two neighbours in yellow
+and blue. On the right, how many different images each tile had. Tiles with fewer different
+images hold less real detail (the model then uses some images twice).
 """)
 code(r"""
-show([clip(lr, LAT, LON, 0.6), clip(to_10m(s1), LAT, LON, 0.6)],
-     ["Sentinel-2, 10 m", "Stage 1, averaged back to 10 m"], size=5.5)
-print(f"agreement with Sentinel-2: {agreement(s1, lr):.2f}")
+show_tiles(m, s1)
 """)
 
 md(r"""
@@ -296,9 +306,6 @@ job.show()     # the whole 2 km area, both stages
 code(r"""
 show([clip(lr, LAT, LON, 0.5), clip(s1, LAT, LON, 0.5), clip(s2, LAT, LON, 0.5)],
      ["Sentinel-2, 10 m", "Stage 1", "Stage 2"], size=4.6, suptitle="500 m in the middle")
-print(f"agreement with Sentinel-2: Stage 1 {agreement(s1, lr):.2f}, "
-      f"Stage 2 {agreement(s2, lr):.2f}")
-print(f"fine detail:               Stage 1 {detail(s1):.4f}, Stage 2 {detail(s2):.4f}")
 """)
 
 md(r"""
@@ -421,8 +428,9 @@ md(r"""
 Session 2 showed the trade-off: more detail, but the detail is less certain. We can measure
 both sides on our own images:
 
-* **agreement with Sentinel-2** (section 3): averaged back to 10 m, does the image still match
-  what the satellite measured?
+* **agreement with Sentinel-2**: average each 4 × 4 block of the 2.5 m image back to one
+  10 m pixel. Does it still match what the satellite measured? (A correlation: 1 = the same
+  pattern of light and dark.)
 * **fine detail**: how much the brightness changes from one pixel to the next.
 
 Look at how far each setting moves along the two axes compared with Stage 1. In our run of

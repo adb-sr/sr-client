@@ -22,7 +22,7 @@ PLACES = {
         lat=15.5784, lon=120.9726, date="2026-03-15", confirmed=True,
         note="rice fields, villages and farm-to-market roads"),
 }
-OWN_PLACE = "My own place (fill in the three fields below)"
+OWN_PLACE = "My own place"
 AREA_KM = 2
 
 # Demo 1 worksheet, step 5: one change to the Stage 2 dials, on the same area

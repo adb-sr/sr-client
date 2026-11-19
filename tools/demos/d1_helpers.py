@@ -58,7 +58,8 @@ def rgb(da, bands=(1, 2, 3), ceiling=0.3):
     return np.clip(np.nan_to_num(a) / ceiling, 0, 1)
 
 
-def show(images, titles, size=4.2, bands=(1, 2, 3), ceiling=0.3, suptitle=None):
+def panel_fig(images, titles, size=4.2, bands=(1, 2, 3), ceiling=0.3, suptitle=None):
+    """Images side by side as a matplotlib figure (each a DataArray or a ready RGB array)."""
     fig, axes = plt.subplots(1, len(images), figsize=(size * len(images), size + 0.4),
                              squeeze=False)
     for ax, img, title in zip(axes[0], images, titles):
@@ -68,6 +69,53 @@ def show(images, titles, size=4.2, bands=(1, 2, 3), ceiling=0.3, suptitle=None):
         ax.axis("off")
     if suptitle:
         fig.suptitle(suptitle, y=1.0)
+    fig.tight_layout()
+    return fig
+
+
+def show(images, titles, **kw):
+    panel_fig(images, titles, **kw)
+    plt.show()
+
+
+def tile_grid(m):
+    """The job's tiles as (rows, cols, size): corner positions in 10 m pixels and the tile
+    size (32 pixels = 320 m). Neighbouring tiles overlap."""
+    rows = sorted({t["row"] for t in m["tiles"]})
+    cols = sorted({t["col"] for t in m["tiles"]})
+    return rows, cols, 32
+
+
+def show_tiles(m, image, highlight=(3, 3)):
+    """Left: the area with the outline of every tile, and two neighbours highlighted to show
+    the overlap. Right: how many different Sentinel-2 images each tile used."""
+    rows, cols, size = tile_grid(m)
+    scale = image.sizes["x"] / m["grid"]["width"]          # image pixels per 10 m pixel
+    fig, axes = plt.subplots(1, 2, figsize=(13, 6.2))
+    ax = axes[0]
+    ax.imshow(rgb(image), interpolation="nearest")
+    for t in m["tiles"]:
+        ax.add_patch(plt.Rectangle((t["col"] * scale, t["row"] * scale), size * scale,
+                                   size * scale, fill=False, ec="white", lw=0.4, alpha=0.6))
+    r, c = rows[min(highlight[0], len(rows) - 1)], cols[min(highlight[1], len(cols) - 2)]
+    for col, colour in ((c, "#ffd400"), (cols[cols.index(c) + 1], "#00e5ff")):
+        ax.add_patch(plt.Rectangle((col * scale, r * scale), size * scale, size * scale,
+                                   fill=False, ec=colour, lw=2.5))
+    step = (cols[1] - cols[0]) * 10 if len(cols) > 1 else size * 10
+    ax.set_title(f"{len(m['tiles'])} tiles of {size * 10} m, one every {step} m: "
+                 f"neighbours overlap by {size * 10 - step} m")
+    ax.axis("off")
+    count = np.full((len(rows), len(cols)), np.nan)
+    for t in m["tiles"]:
+        count[rows.index(t["row"]), cols.index(t["col"])] = len(set(t["scene_ids"]))
+    im = axes[1].imshow(count, cmap="YlGnBu", vmin=0, vmax=8)
+    for (i, j), v in np.ndenumerate(count):
+        if np.isfinite(v):
+            axes[1].text(j, i, int(v), ha="center", va="center", fontsize=9,
+                         color="white" if v > 4 else "black")
+    axes[1].set_title("different Sentinel-2 images used by each tile (of 8)")
+    axes[1].axis("off")
+    fig.colorbar(im, ax=axes[1], shrink=0.7)
     fig.tight_layout()
     plt.show()
 
@@ -364,31 +412,6 @@ class Sweep:
 
 # ---- the worksheet ("your turn") ---------------------------------------------------------
 
-def choose_place(place, my_lat=None, my_lon=None, my_date=None):
-    """(lat, lon, date) of a place from the list, or of your own point and date."""
-    if place in PLACES:
-        p = PLACES[place]
-        print(f"{place}: {p['note']}")
-        return p["lat"], p["lon"], p["date"]
-    print(f"Your own place: {my_lat:.4f}, {my_lon:.4f} on {my_date}")
-    return float(my_lat), float(my_lon), str(my_date)
-
-
-def print_estimate(est):
-    """What the free estimate says, in plain words. Returns True if the job can be sent."""
-    print(f"{est['tiles']} tiles of 320 m, about ${est['estimated_usd']:.2f} if nothing was "
-          f"computed before")
-    print(f"{len(est['scenes'])} Sentinel-2 images found between {est['search_window'][0]} "
-          f"and {est['search_window'][1]}")
-    for w in est["warnings_likely"]:
-        print("warning:", w["message"])
-    for p in est["problems"]:
-        print("CANNOT SEND THIS JOB:", p)
-    if est["problems"]:
-        print("Pick another place or date and run the cell again.")
-    return not est["problems"]
-
-
 def view(da, lat, lon, size_m=500, east_m=0, north_m=0):
     """A square of size_m metres; its centre is moved east_m and north_m from (lat, lon)."""
     lat2 = lat + north_m / 111_320
@@ -435,40 +458,6 @@ WARNING_MEANING = {
 }
 
 
-def print_warnings(job):
-    """The job's warnings in plain words (job.wait() prints the service's own text)."""
-    if not job.warnings:
-        print("warnings: none")
-    for code in dict.fromkeys(w["code"] for w in job.warnings):
-        print(f"in plain words, {code}: {WARNING_MEANING.get(code, 'see the message above')}")
-
-
 def seed_difference(a, b):
     """Mean absolute difference of two images over the natural-colour bands."""
     return np.abs(a.sel(band=[1, 2, 3]) - b.sel(band=[1, 2, 3])).mean("band")
-
-
-def result_card(g):
-    """Everything for the debrief, from the notebook's variables (pass globals())."""
-    def get(name, default="(not answered)"):
-        v = g.get(name, default)
-        return default if v in ("", None) else v
-
-    lines = ["=" * 64, f"PLACE       {get('PLACE')}  ({get('DATE')})"]
-    if "s1" in g and "lr" in g:
-        lines.append(f"AGREEMENT   with Sentinel-2 at 10 m: Stage 1 {agreement(g['s1'], g['lr']):.2f}"
-                     + (f", Stage 2 {agreement(g['s2'], g['lr']):.2f}" if "s2" in g else ""))
-    if "job" in g:
-        codes = [w["code"] for w in g["job"].warnings]
-        lines.append(f"WARNINGS    {', '.join(codes) if codes else 'none'}")
-    lines += ["-" * 64,
-              f"Q1  clear images out of 8:        {get('Q1_CLEAR_IMAGES')}",
-              f"    a cloud the mask missed:      {get('Q1_MISSED_CLOUD')}",
-              f"Q2  new in Stage 1:               {get('Q2_NEW_IN_STAGE_1')}",
-              f"Q3  Stage 2 got right:            {get('Q3_RIGHT')}",
-              f"    Stage 2 got wrong:            {get('Q3_WRONG')}",
-              f"Q4  my experiment:                {get('EXPERIMENT')}",
-              f"    for a picture in a report:    {get('Q4_REPORT_PICTURE')}",
-              f"    for counting buildings:       {get('Q4_COUNTING')}",
-              "=" * 64]
-    print("\n".join(lines))

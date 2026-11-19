@@ -182,9 +182,18 @@ md(r"""
 ## 3. The inputs, and Stage 1
 
 As soon as stage 1 is ready, the job's manifest lists which Sentinel-2 images were used for
-each tile. Below, the dots are all the images found (as in the Session 2 slide on scene
-selection): the filled ones were used, the grey ones were too cloudy over this area or not
-needed.
+each tile. Below, each dot is one image that the search found. The height of a dot is **how
+much of our area is under cloud or cloud shadow in that image**, according to ESA's scene
+classification. The filled dots were used; the grey ones were too cloudy over this area or
+not needed.
+
+The search in section 1 can only filter on the cloud cover of the whole Sentinel-2 tile
+(110 km across), which says little about a 2 km area. So the service then looks at each
+image over each 320 m tile and keeps the clearest ones closest to the date. That is why an
+image that is mostly cloudy over the area can still be used: for the tiles where it is clear.
+
+(Cebu lies where two Sentinel-2 tiles overlap, so most satellite passes were found twice.
+Their dots lie on top of each other, and the service uses one copy.)
 """)
 code(r"""
 wait_for_stage(job, "1")
@@ -192,14 +201,18 @@ m = manifest(job)
 
 target = date.fromisoformat(DATE)
 used = set(m["scenes"])
-fig, ax = plt.subplots(figsize=(10, 3))
+cloudy = cloud_over_area([s["id"] for s in est["scenes"]], area)   # read from the archive
+
+fig, ax = plt.subplots(figsize=(10, 3.2))
 for s in est["scenes"]:
     d = (date.fromisoformat(s["date"][:10]) - target).days
-    ax.scatter(d, s["cloud_cover"], s=60, color="#007DB7" if s["id"] in used else "none",
+    ax.scatter(d, 100 * cloudy[s["id"]], s=60,
+               color="#007DB7" if s["id"] in used else "none",
                edgecolors="#007DB7" if s["id"] in used else "grey")
 ax.axvline(0, color="k", ls=":")
+ax.set_ylim(-5, 105)
 ax.set_xlabel(f"days from {DATE}")
-ax.set_ylabel("cloud over the whole\nSentinel-2 tile (%)")
+ax.set_ylabel("cloud and shadow\nover our area (%)")
 ax.set_title(f"{len(est['scenes'])} images found, {len(used)} used (filled)")
 plt.show()
 """)

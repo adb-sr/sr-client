@@ -119,6 +119,27 @@ def scene_images(scene_ids, lat, lon, km):
     return out
 
 
+def cloud_over_area(scene_ids, area):
+    """For each Sentinel-2 scene, the share (0-1) of ``area`` (bbox W, S, E, N) that is cloud,
+    cirrus or shadow in ESA's scene classification (the rule the service uses), among the
+    pixels the scene covers. NaN if the scene does not cover the area. Read from the public
+    archive, several scenes at a time."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(sid):
+        item = httpx.get(EARTH_SEARCH + sid, timeout=60).json()
+        with rasterio.open(item["assets"]["scl"]["href"]) as r:
+            win = from_bounds(*transform_bounds("EPSG:4326", r.crs, *area), r.transform)
+            scl = r.read(1, window=win, boundless=True, fill_value=0)
+        covered = scl != 0
+        if not covered.any():
+            return float("nan")
+        return float((~np.isin(scl, (4, 5, 6, 7)))[covered].mean())
+
+    with ThreadPoolExecutor(8) as pool:
+        return dict(zip(scene_ids, pool.map(one, scene_ids)))
+
+
 def ndvi(da):
     """Vegetation index: (NIR - red) / (NIR + red)."""
     red, nir = da.sel(band=1), da.sel(band=4)

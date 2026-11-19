@@ -105,6 +105,7 @@ code('# @title Helper functions (run this cell; you do not need to read it) { di
      + as_code("PLACES", {k: {f: v[f] for f in ("lat", "lon", "date", "note")}
                           for k, v in PLACES.items()})
      + as_code("EXPERIMENTS", EXPERIMENTS) + "\n\n"
+     + (HERE / "widgets_common.py").read_text() + "\n\n"
      + (HERE / "d1_widgets.py").read_text(), hidden=True)
 
 md(rf"""

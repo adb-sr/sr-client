@@ -4,9 +4,12 @@
 |---|---|
 | `places.py` | the five places, the worksheet's dial experiments, the walkthrough's jobs: the single source |
 | `d1_helpers.py` | helper code pasted into both Demo 1 notebooks (hidden cell) |
+| `widgets_common.py` | controls shared by the worksheets: answers that save themselves, figures shown as images (ipywidgets) |
+| `d1_widgets.py` | the Demo 1 worksheet's steps: place menu and send button, viewers with sliders, experiment button, result card |
 | `build_demo1.py` | → `notebooks/demo1_super_resolution.ipynb` (presenter walkthrough) |
 | `build_demo1_worksheet.py` | → `notebooks/demo1_your_turn.ipynb` (participants) |
-| `d2_helpers.py` | helper code pasted into the Demo 2 notebook |
+| `d2_helpers.py` | data loading, figures and scores pasted into the Demo 2 notebook |
+| `d2_widgets.py` | the Demo 2 steps: place menu (every step follows a change), viewers, score button, decision slider, verdict, result card |
 | `build_demo2.py` | → `notebooks/demo2_use_cases.ipynb`; `DATA_URL` is where the data package is hosted |
 | `build_demo2_package.py` | makes the Demo 2 data package (needs the service, torch and the land-cover model) |
 | `old_d2_helpers.py` | the model, reference-map and scoring code of the first Demo 2 notebook; used by the package builder |
@@ -28,3 +31,7 @@ python tools/demos/build_demo2_package.py OUT  # then upload OUT/* to DATA_URL
 python tools/demos/run_nb.py notebooks/demo1_your_turn.ipynb /tmp/out.ipynb 'PLACE="Nueva Ecija rice farms"'
 DEMO2_DATA_URL=OUT python tools/demos/run_nb.py notebooks/demo2_use_cases.ipynb /tmp/out2.ipynb
 ```
+
+The worksheets use ipywidgets (Colab ships version 7.7.1): each cell is run once and the
+controls under it act at once. Test them by setting widget values in code (see `UI` in
+`widgets_common.py`); `run_nb.py` only replaces constants.

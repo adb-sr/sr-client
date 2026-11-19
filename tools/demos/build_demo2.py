@@ -10,7 +10,7 @@ from pathlib import Path
 
 import nbformat as nbf
 
-from places import PLACES
+from places import PLACES, as_code
 
 HERE = Path(__file__).parent
 OUT = HERE.parent.parent / "notebooks" / "demo2_use_cases.ipynb"
@@ -36,10 +36,6 @@ def options(values):
 place_default = "Cebu City and Mandaue"
 assert place_default in PLACES
 place_rows = "\n".join(f"| **{name}** | {p['note']} |" for name, p in PLACES.items())
-VIEW = """EAST_M = 0  # @param {type:"slider", min:-750, max:750, step:50}
-NORTH_M = 0  # @param {type:"slider", min:-750, max:750, step:50}
-SIZE_M = %d  # @param [250, 500, 1000, 2000] {type:"raw"}"""
-BEST = options(["Sentinel-2", "Stage 1", "Stage 2", "no real difference"])
 
 md(r"""
 # Practical demonstration 2: from super-resolved images to maps
@@ -53,10 +49,14 @@ labelled sample.** In this notebook you run that test for the place you worked o
 morning, and you end with a verdict: would you **deploy** it, **pilot** it, or **not use**
 it?
 
-Work in pairs again. **About 25 minutes, six steps.** You do not need to write code: run each
-cell with **Shift + Enter** and change values in the small forms on the right. Nothing needs
-a key or a GPU: the images and the maps were made before the workshop, and the notebook only
-downloads them.
+Work in pairs again. **About 25 minutes, six steps.** You do not need to write code:
+
+* **run each grey cell once**, from top to bottom, with **Shift + Enter** (or the ▶ button);
+* then use the **menus, buttons and sliders that appear under the cell**. They act at once,
+  and your answers are saved as you type. You never need to run a cell twice.
+
+Nothing needs a key or a GPU: the images and the maps were made before the workshop, and the
+notebook only downloads them.
 
 | Step | What you do | Time |
 |---|---|---|
@@ -79,8 +79,13 @@ The four steps of Session 3 are all here:
 
 md("## 0. Setup\n\nRun the next cell. It holds the helper code; you do not need to read it.")
 code('# @title Helper functions (run this cell; you do not need to read it) { display-mode: "form" }\n'
-     + (HERE / "d2_helpers.py").read_text()
-     + f'\n\nDATA_URL = os.environ.get("DEMO2_DATA_URL", "{DATA_URL}")\n', hidden=True)
+     + (HERE / "d2_helpers.py").read_text() + "\n\n"
+     + as_code("PLACES", {k: {f: v[f] for f in ("lat", "lon", "date", "note")}
+                          for k, v in PLACES.items()})
+     + f'PLACE_DEFAULT = "{place_default}"\n'
+     + f'DATA_URL = os.environ.get("DEMO2_DATA_URL", "{DATA_URL}")\n\n\n'
+     + (HERE / "widgets_common.py").read_text() + "\n\n"
+     + (HERE / "d2_widgets.py").read_text(), hidden=True)
 
 md(rf"""
 ## 1. Pick your place *(3 minutes)*
@@ -98,14 +103,12 @@ For each place there are three images of the same 2 km square:
   option.
 * **Stage 1**: 8 Sentinel-2 images combined. Nothing invented.
 * **Stage 2**: the full model, with added detail.
-""")
-code(rf"""
-PLACE = "{place_default}"  # @param {options(PLACES)}
 
-place = Place(PLACE, DATA_URL)
-print(place)
-show_inputs(place, size_m=1000)
+Run the cell and choose your place in the menu (it loads in a few seconds). Move around with
+the sliders; the small picture shows where you are. If you change the place later, every
+step below follows: there is nothing to run again.
 """)
+code("pick_place(DATA_URL)")
 
 md(r"""
 ## 2. Guess first *(1 minute)*
@@ -114,13 +117,9 @@ A land-cover model will draw a map from each of the three images. It was trained
 high-resolution images** and has never seen a super-resolved one. We then check its
 **buildings** and its **roads** against public maps.
 
-Which image will give the best map? Agree on a guess before you go on.
+Which image will give the best map? Agree on a guess and click it before you go on.
 """)
-code(rf"""
-# @title Your guess: which image gives the best map?
-GUESS_BUILDINGS = "Stage 2"  # @param {BEST}
-GUESS_ROADS = "Stage 2"  # @param {BEST}
-""")
+code("step2_guess()")
 
 md(r"""
 ## 3. The maps *(3 minutes)*
@@ -131,12 +130,11 @@ every 2.5 m pixel one of 8 classes. It is the model behind the road result in Se
 
 This is the **"reuse"** path from Session 3: nobody labelled anything on super-resolved
 images. We only fed the model three different images of your place.
-""")
-code('# @title Move the view { run: "auto" }\n' + (VIEW % 1000) + r"""
 
-show_landcover(place, SIZE_M, EAST_M, NORTH_M)
-show_inputs(place, SIZE_M, EAST_M, NORTH_M)
+Top row: the three images. Bottom row: the map the model drew from each. Move around and
+compare. Where do the maps differ most?
 """)
+code("step3_maps()")
 
 md(r"""
 ## 4. Score against public maps *(4 minutes)*
@@ -152,14 +150,10 @@ The reference is two public maps that anyone can download for any place in the P
 0 = no overlap, 1 = perfect. *found* is the share of the public map's buildings (or roads)
 that the model found; *correct* is the share of the model's buildings that are in the public
 map.
+
+Press **Show the scores** to see them, and whether your guess was right.
 """)
-code(r"""
-show_reference(place, size_m=1000)
-table = score_table(place)
-show_scores(table, f"{PLACE}: land-cover model against the public maps")
-check_guess(table, {"buildings": GUESS_BUILDINGS, "roads": GUESS_ROADS})
-table
-""")
+code("step4_scores()")
 md(r"""
 The scores look low compared with Session 3. Two reasons: the references are public maps and
 not expert labels, and a pixel-by-pixel score punishes every shift of a few metres. Compare
@@ -180,18 +174,10 @@ Move the view and find:
 * a **failure**: something the super-resolved map gets wrong. Is it a miss, a false alarm, or
   a building in the wrong shape? Could the public map be the one that is wrong?
 
-You know this place: use that.
+You know this place: use that. Switch between **buildings** and **roads** with the buttons,
+and write your two finds in the blue box (a few words each).
 """)
-code('# @title Move the view { run: "auto" }\n'
-     'TASK = "buildings"  # @param ["buildings", "roads"]\n' + (VIEW % 500) + r"""
-
-show_errors(place, TASK, SIZE_M, EAST_M, NORTH_M)
-""")
-code(r"""
-# @title Your finds (a few words each)
-RESCUE = ""  # @param {type:"string"}
-FAILURE = ""  # @param {type:"string"}
-""")
+code("step5_hunt()")
 
 md(r"""
 ## 6. From a map to a decision *(8 minutes)*
@@ -204,17 +190,12 @@ in tomorrow's hackathon:
 > buildings (or roads). How many of those visits go to the right squares?
 
 A pick counts as a **hit** if the square is truly among the densest according to the public
-map. Change `BUDGET` (how many squares you can visit) and `TASK`, and watch whether
-super-resolution changes the number of hits. A better F1 does not always change the decision.
+map. Move the slider (how many squares you can visit) and switch between buildings and
+roads, and watch whether super-resolution changes the number of hits. A better F1 does not always change the decision.
 With so few squares, one hit more or less can be chance: try several budgets before you
 conclude.
 """)
-code('# @title Your decision { run: "auto" }\n' + r"""
-TASK = "buildings"  # @param ["buildings", "roads"]
-BUDGET = 10  # @param {type:"slider", min:3, max:30, step:1}
-
-hits = decision(place, TASK, BUDGET)
-""")
+code("step6_decision()")
 md(r"""
 **Your verdict.** For the use you have in mind at your place, would you:
 
@@ -224,18 +205,13 @@ md(r"""
 
 "Super-resolution does not help here" is a perfectly good result.
 """)
-code(r"""
-# @title Your verdict
-VERDICT_FOR = "a screening map of built-up areas"  # @param {type:"string"}
-VERDICT = "pilot"  # @param ["deploy", "pilot", "do not use"]
-WOULD_CHANGE_MY_MIND = ""  # @param {type:"string"}
-
-result_card(globals())
-""")
+code("step6_verdict()")
 md(r"""
-Enter your verdict in the poll (the link is on the slide), and be ready to say in one
+**Your result card.** Run the cell; if you change an answer afterwards, press **Update the
+card**. Enter your verdict in the poll (the link is on the slide), and be ready to say in one
 sentence why.
 """)
+code("result_card()")
 
 md(r"""
 ---

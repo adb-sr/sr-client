@@ -146,26 +146,30 @@ The reference is two public maps that anyone can download for any place in the P
 * **OpenStreetMap roads** (through Overture Maps). Roads are lines, so each one is widened to
   a typical width for its class (12 m for a motorway, 3 m for a farm track).
 
-**F1** measures the overlap between the model's map and the public map, pixel by pixel:
-0 = no overlap, 1 = perfect. *found* is the share of the public map's buildings (or roads)
-that the model found; *correct* is the share of the model's buildings that are in the public
-map.
+Two maps of the same place never line up to the metre, so a building (or road) pixel counts
+as **found** if the model marks one **within 5 m** of it (two pixels), and a pixel of the
+model counts as **correct** if the public map has one within 5 m. *found* is the share of the
+public map that the model found; *correct* is the share of the model's map that is right.
+**F1** combines the two: 0 = nothing right, 1 = perfect.
+
+**The dashed line** is the score of a useless map that says "building" (or "road")
+everywhere. In a dense city it is high, because almost every spot is within 5 m of a
+building. A map is only worth something where it is clearly above that line.
 
 Press **Show the scores** to see them, and whether your guess was right.
 """)
 code("step4_scores()")
 md(r"""
-The scores look low compared with Session 3. Two reasons: the references are public maps and
-not expert labels, and a pixel-by-pixel score punishes every shift of a few metres. Compare
-the three inputs with each other, not with 1.
+Compare the three inputs with each other and with the dashed line, not with 1. The public
+maps are not perfect either: a missing road in OpenStreetMap counts against the model.
 """)
 
 md(r"""
 ## 5. Hunt: one rescue, one failure *(6 minutes)*
 
 A score hides where the map is right and where it is wrong. Look for yourself. In the bottom
-row, **green** is correct, **blue** is a false alarm (only the model says "building") and
-**red** is missed (only the public map says so).
+row, **green** is right (the two maps agree within 5 m), **blue** is a false alarm (only the
+model says "building") and **red** is missed (only the public map says so).
 
 Move the view and find:
 
@@ -227,13 +231,20 @@ show_all_places(summary).round(2)
 md(r"""
 **What we found** (our run before the workshop):
 
-* **Buildings**: the score rises with every step, in every place. F1 is 0.15 to 0.26 on
-  Sentinel-2, 0.35 to 0.44 on Stage 1 and 0.53 to 0.60 on Stage 2.
+* **Buildings**: the score rises with every step, in every place: F1 0.26 to 0.37 on
+  Sentinel-2, 0.58 to 0.66 on Stage 1, 0.74 to 0.84 on Stage 2. Stage 2 finds 72 to 86 % of
+  the buildings, and 76 to 88 % of what it marks is right. But in the four cities, a map
+  that says "building" everywhere already scores 0.62 to 0.79: only Stage 2 is above that
+  line, and only a little. Where almost everything is built up, *where are the buildings?*
+  is not the useful question; *where are they denser?* is (step 6). In Nueva Ecija, with
+  few buildings, the line is at 0.22 and Stage 2 (0.84) is far above it.
 * **Roads**: on Sentinel-2 the model finds almost no roads in four of the five places (F1
-  0.01 to 0.07). Only around ADB headquarters, where the avenues are wide, does it reach
-  0.20. On Stage 2 it reaches 0.20 to 0.44. The largest gain is for the farm roads of Nueva
-  Ecija (0.01 to 0.44); the smallest is in Cebu, where the streets between small houses are
-  narrower than a 2.5 m pixel can show.
+  0.01 to 0.11); only around ADB headquarters, where the avenues are wide, does it reach
+  0.29. Stage 2 reaches 0.39 to 0.69 and is above the "roads everywhere" line (0.40 to 0.46
+  in the cities, 0.12 in Nueva Ecija) in every place except Cebu, where the streets between
+  small houses are too narrow. Stage 2 finds 32 to 60 % of the roads, and 50 to 82 % of what
+  it marks is right: it misses roads more often than it invents them. The largest gain is
+  for the farm roads of Nueva Ecija (0.02 to 0.69).
 * **The decision changes less than the score.** With 10 squares to visit for buildings, the
   hits were 4, 5 and 5 (Sentinel-2, Stage 1, Stage 2) at ADB headquarters, 4, 4 and 4 at
   DHSUD, 2, 3 and 1 in Cebu, but 3, 4 and 8 in Nueva Ecija. In a dense city almost every
@@ -258,8 +269,8 @@ all_places(summary, "own_model_F1").round(2)
 """)
 md(r"""
 **The gap disappears.** When a model is trained on each input, the three inputs score about
-the same, and plain Sentinel-2 is often slightly ahead (buildings: 0.44 to 0.64 on Sentinel-2
-against 0.40 to 0.59 on Stage 2). This quick model only looks at colours and textures around
+the same (buildings: 0.73 to 0.87 on Sentinel-2 against 0.72 to 0.87 on Stage 2; roads: 0.35
+to 0.50 against 0.35 to 0.51). This quick model only looks at colours and textures around
 each pixel, so it is a rough test, but it shows what part of the gain above is: super-resolution
 makes Sentinel-2 *look like* the images that existing models were trained on. So:
 

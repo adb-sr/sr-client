@@ -6,6 +6,7 @@ Participants only download and look; nothing here runs in the workshop.
 
     export SR_API_KEY=srk_... SR_API_URL=https://...
     python tools/demos/build_demo2_package.py OUT_DIR [--weights FILE_OR_URL] [--only NAME]
+    python tools/demos/build_demo2_package.py OUT_DIR --rescore   # scores only, from the files
 
 Needs: sr-client[geo], torch, satlaspretrain_models, duckdb, geopandas, scikit-learn, scipy.
 Writes OUT_DIR/<slug>.npz per place and OUT_DIR/summary.json. Upload the folder's content to
@@ -22,6 +23,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
 exec((Path(__file__).parent / "old_d2_helpers.py").read_text())  # the verified Nov 2 code
+# the notebook's own scoring (5 m tolerance), so the package and the notebook agree
+exec((Path(__file__).parent / "d2_helpers.py").read_text())
 
 from places import AREA_KM, PLACES  # noqa: E402
 from sr_client import SRClient, area_around  # noqa: E402
@@ -47,6 +50,48 @@ def to_uint16(da):
     return np.clip(np.nan_to_num(da.values) * 10000, 0, 65535).round().astype("uint16")
 
 
+def score_rows(images, maps, refs, valid, own_model=True):
+    """Scores of each input for each task. ``images[inp].values`` is a (4, y, x) array."""
+    rows = {}
+    for task, cls in TASKS.items():
+        rows[task] = {"reference_share": float(refs[task][valid].mean()),
+                      "everywhere_F1": round(float(
+                          scores(np.ones_like(valid), refs[task], valid)["F1"]), 4)}
+        truth = per_cell(refs[task], valid)
+        for inp in INPUTS:
+            s = scores(maps[inp] == cls, refs[task], valid)
+            est = per_cell(maps[inp] == cls, valid)
+            ok = np.isfinite(est) & np.isfinite(truth)
+            s["density_r"] = float(np.corrcoef(est[ok], truth[ok])[0, 1])
+            if own_model:
+                s["own_model_F1"] = float(train_and_test(images[inp], refs[task], valid)[0])
+            rows[task][inp] = {k: round(float(v), 4) for k, v in s.items()}
+    return rows
+
+
+def rescore(out):
+    """Recompute the scores in every file of the package and in summary.json, from the
+    images and maps already there (no service, no model)."""
+    from types import SimpleNamespace
+
+    summary_file = out / "summary.json"
+    summary = json.loads(summary_file.read_text())
+    for name, entry in summary.items():
+        z = dict(np.load(out / entry["file"]))
+        meta = json.loads(str(z["meta"]))
+        images = {i: SimpleNamespace(values=z[KEYS[i]].astype("float32") / 10000)
+                  for i in INPUTS}
+        maps = {i: z[f"lc_{KEYS[i]}"] for i in INPUTS}
+        refs = {t: z[f"ref_{t}"].astype(bool) for t in TASKS}
+        rows = score_rows(images, maps, refs, z["valid"].astype(bool))
+        meta["scores"] = entry["scores"] = rows
+        meta["tolerance_m"] = entry["tolerance_m"] = TOLERANCE_M
+        z["meta"] = json.dumps(meta)
+        np.savez_compressed(out / entry["file"], **z)
+        print(name, {t: [rows[t][i]["F1"] for i in INPUTS] for t in TASKS}, flush=True)
+    summary_file.write_text(json.dumps(summary, indent=1))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
@@ -54,8 +99,12 @@ def main():
     ap.add_argument("--only", help="build one place only (name contains this)")
     ap.add_argument("--no-own-model", action="store_true",
                     help="skip the quick per-input model (the 'train your own' numbers)")
+    ap.add_argument("--rescore", action="store_true",
+                    help="only recompute the scores of an existing package")
     args = ap.parse_args()
     out = Path(args.out)
+    if args.rescore:
+        return rescore(out)
     out.mkdir(parents=True, exist_ok=True)
     summary_file = out / "summary.json"
     summary = json.loads(summary_file.read_text()) if summary_file.exists() else {}
@@ -73,24 +122,14 @@ def main():
         refs, buildings, roads = reference_maps(like)
         maps = {inp: landcover(model, images[inp]).astype("uint8") for inp in INPUTS}
 
-        rows = {}
-        for task, cls in TASKS.items():
-            rows[task] = {"reference_share": float(refs[task][valid].mean())}
-            truth = per_cell(refs[task], valid)
-            for inp in INPUTS:
-                s = scores(maps[inp] == cls, refs[task], valid)
-                est = per_cell(maps[inp] == cls, valid)
-                ok = np.isfinite(est) & np.isfinite(truth)
-                s["density_r"] = float(np.corrcoef(est[ok], truth[ok])[0, 1])
-                if not args.no_own_model:
-                    s["own_model_F1"] = float(train_and_test(images[inp], refs[task], valid)[0])
-                rows[task][inp] = {k: round(float(v), 4) for k, v in s.items()}
+        rows = score_rows(images, maps, refs, valid, own_model=not args.no_own_model)
         meta = {"name": name, "lat": p["lat"], "lon": p["lon"], "date": p["date"],
                 "note": p["note"], "job_id": job.id, "pixel_m": 2.5,
                 "crs": str(like.rio.crs), "transform": list(like.rio.transform())[:6],
                 "warnings": [w["code"] for w in job.warnings],
                 "n_buildings": int(len(buildings)), "n_road_segments": int(len(roads)),
-                "classes": LC_CLASSES, "class_colours": LC_COLOURS, "scores": rows}
+                "classes": LC_CLASSES, "class_colours": LC_COLOURS, "scores": rows,
+                "tolerance_m": TOLERANCE_M}
         np.savez_compressed(
             out / f"{slug(name)}.npz",
             s2=to_uint16(images["Sentinel-2"]), stage1=to_uint16(images["Stage 1"]),
@@ -100,7 +139,7 @@ def main():
             meta=json.dumps(meta))
         summary[name] = {"file": f"{slug(name)}.npz", **{k: meta[k] for k in (
             "lat", "lon", "date", "note", "warnings", "n_buildings", "n_road_segments",
-            "scores")}}
+            "scores", "tolerance_m")}}
         summary_file.write_text(json.dumps(summary, indent=1))
         size = (out / f"{slug(name)}.npz").stat().st_size / 1e6
         f1 = {t: [rows[t][i]["F1"] for i in INPUTS] for t in TASKS}

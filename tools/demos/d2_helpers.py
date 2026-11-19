@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Patch, Rectangle
+from scipy import ndimage as ndi
 
 plt.rcParams.update({"figure.dpi": 100, "axes.titlesize": 11})
 INPUTS = ["Sentinel-2", "Stage 1", "Stage 2"]
@@ -16,6 +17,7 @@ KEYS = {"Sentinel-2": "s2", "Stage 1": "stage1", "Stage 2": "stage2"}
 COLOURS = {"Sentinel-2": "#a6a6a6", "Stage 1": "#7fbfdf", "Stage 2": "#007DB7"}
 TASK_CLASS = {"buildings": 7, "roads": 3}
 PIXEL_M = 2.5
+TOLERANCE_M = 5      # a pixel counts as found (or correct) if the other map has one this close
 OK_COLOUR, FALSE_COLOUR, MISS_COLOUR = (0.10, 0.70, 0.30), (0.20, 0.45, 0.95), (0.90, 0.20, 0.20)
 
 
@@ -161,11 +163,29 @@ def fig_reference(place, size_m=2000, east_m=0, north_m=0):
 
 # ---- scoring -----------------------------------------------------------------------------
 
-def scores(pred, ref, valid):
-    p, r = pred[valid], ref[valid]
-    tp, fp, fn = np.sum(p & r), np.sum(p & ~r), np.sum(~p & r)
-    return {"F1": 2 * tp / max(2 * tp + fp + fn, 1), "found": tp / max(tp + fn, 1),
-            "correct": tp / max(tp + fp, 1)}
+def near(mask, metres=TOLERANCE_M):
+    """True wherever ``mask`` has a pixel within ``metres``."""
+    r = int(metres // PIXEL_M)
+    if r == 0:
+        return mask
+    y, x = np.ogrid[-r:r + 1, -r:r + 1]
+    return ndi.binary_dilation(mask, structure=x * x + y * y <= r * r)
+
+
+def scores(pred, ref, valid, metres=TOLERANCE_M):
+    """found: share of the reference's pixels with a model pixel within ``metres``;
+    correct: share of the model's pixels with a reference pixel within ``metres``;
+    F1 combines the two (0 = nothing right, 1 = perfect)."""
+    found = np.sum(ref & near(pred, metres) & valid) / max(np.sum(ref & valid), 1)
+    correct = np.sum(pred & near(ref, metres) & valid) / max(np.sum(pred & valid), 1)
+    return {"F1": 2 * found * correct / max(found + correct, 1e-9), "found": found,
+            "correct": correct}
+
+
+def everywhere(place, task):
+    """F1 of a useless map that says 'building' (or 'road') everywhere: the line a real map
+    has to beat. In a dense city it is high, because most places are near a building."""
+    return float(scores(np.ones_like(place.valid), place.refs[task], place.valid)["F1"])
 
 
 def score_table(place):
@@ -177,7 +197,9 @@ def score_table(place):
             s = scores(place.prediction(task, inp), place.refs[task], place.valid)
             rows.append({"task": task, "input": inp, **{k: round(float(v), 2)
                                                         for k, v in s.items()}})
-    return pd.DataFrame(rows).set_index(["task", "input"])
+    table = pd.DataFrame(rows).set_index(["task", "input"])
+    table.attrs["everywhere"] = {t: everywhere(place, t) for t in TASK_CLASS}
+    return table
 
 
 def fig_scores(table, title):
@@ -186,11 +208,16 @@ def fig_scores(table, title):
     f1.plot.bar(ax=ax, color=[COLOURS[i] for i in INPUTS], rot=0, width=0.75)
     for c in ax.containers:
         ax.bar_label(c, fmt="%.2f", fontsize=8)
-    ax.set_ylabel("F1 (1 = perfect)")
+    base = table.attrs.get("everywhere", {})
+    for k, task in enumerate(f1.index):
+        if task in base:
+            ax.hlines(base[task], k - 0.42, k + 0.42, colors="k", linestyles="--", lw=1.2,
+                      label="a map that says yes everywhere" if k == 0 else None)
+    ax.set_ylabel(f"F1 (1 = perfect)\nwithin {TOLERANCE_M} m")
     ax.set_xlabel("")
     ax.set_title(title, fontsize=10)
-    ax.set_ylim(0, max(0.1, f1.values.max() * 1.25))
-    ax.legend(frameon=False, ncol=3, loc="upper left")
+    ax.set_ylim(0, 1.12)
+    ax.legend(frameon=False, ncol=2, loc="upper left", fontsize=8)
     fig.tight_layout()
     return fig
 
@@ -213,16 +240,21 @@ def guess_lines(table, guesses):
         else:
             mark = "as you guessed ✓" if guess == result else f"you guessed: {guess}"
         f1 = table["F1"][task]
+        base = table.attrs.get("everywhere", {}).get(task)
         lines.append(f"{task:<10} best: {result:<18} ({mark})   F1 " +
-                     ", ".join(f"{i} {f1[i]:.2f}" for i in INPUTS))
+                     ", ".join(f"{i} {f1[i]:.2f}" for i in INPUTS) +
+                     (f";  saying yes everywhere: {base:.2f}" if base is not None else ""))
     return lines
 
 
-def _error_image(pred, ref, valid):
+def _error_image(pred, ref, valid, metres=TOLERANCE_M):
+    """Green: right (within ``metres`` of the other map). Blue: false alarm (only the
+    model). Red: missed (only the public map)."""
+    near_pred, near_ref = near(pred, metres), near(ref, metres)
     img = np.full(pred.shape + (3,), 0.12)
-    img[pred & ref] = OK_COLOUR
-    img[pred & ~ref] = FALSE_COLOUR
-    img[~pred & ref] = MISS_COLOUR
+    img[ref & ~near_pred] = MISS_COLOUR
+    img[pred & ~near_ref] = FALSE_COLOUR
+    img[(pred & near_ref) | (ref & near_pred)] = OK_COLOUR
     img[~valid] = 0
     return img
 
@@ -242,7 +274,8 @@ def fig_errors(place, size_m=500, east_m=0, north_m=0, task="buildings"):
         axes[1, j].set_title(f"{task} from {inp}: F1 here {scores(pred, ref, valid)['F1']:.2f}")
     _off(axes)
     fig.legend([Patch(color=c) for c in (OK_COLOUR, FALSE_COLOUR, MISS_COLOUR)],
-               ["correct", "false alarm (only the model)", "missed (only the public map)"],
+               [f"right (within {TOLERANCE_M} m)", "false alarm (only the model)",
+                "missed (only the public map)"],
                loc="lower center", ncol=3, frameon=False)
     fig.suptitle(f"{place.name}, {task}: {size_m} m across", y=0.995)
     fig.tight_layout(rect=(0, 0.04, 1, 0.98), h_pad=3.0)
@@ -316,7 +349,7 @@ def all_places(summary, value="F1"):
     return pd.DataFrame(rows).set_index(["task", "place"]).sort_index()
 
 
-def show_all_places(summary, value="F1", label="F1 (1 = perfect)"):
+def show_all_places(summary, value="F1", label=f"F1 (1 = perfect)\nwithin {TOLERANCE_M} m"):
     table = all_places(summary, value)
     fig, axes = plt.subplots(1, 2, figsize=(15, 4.2), sharey=True)
     for ax, task in zip(axes, TASK_CLASS):
@@ -327,11 +360,19 @@ def show_all_places(summary, value="F1", label="F1 (1 = perfect)"):
                            legend=task == "buildings")
         for c in ax.containers:
             ax.bar_label(c, fmt="%.2f", fontsize=7)
+        if value == "F1":
+            base = [summary[n]["scores"][task].get("everywhere_F1") for n in table.loc[task].index]
+            for k, b in enumerate(base):
+                if b is not None:
+                    ax.hlines(b, k - 0.42, k + 0.42, colors="k", linestyles="--", lw=1.2,
+                              label="saying yes everywhere" if k == 0 else None)
         ax.set_title(task.capitalize())
         ax.set_xlabel("")
         ax.set_ylabel(label)
         ax.tick_params(axis="x", labelsize=8)
-    axes[0].legend(frameon=False, ncol=3, loc="upper left")
+    for ax in axes:
+        ax.set_ylim(0, 1.12)
+    axes[0].legend(frameon=False, ncol=2, loc="upper left", fontsize=8)
     fig.tight_layout()
     plt.show()
     return table

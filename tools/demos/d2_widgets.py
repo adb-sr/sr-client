@@ -1,12 +1,16 @@
 # ---- the notebook's controls: menus, buttons and sliders that act at once ---------------------
-S = {}          # this session: the place that is loaded, the scores, the decision
+S = {}          # this session: the place that is loaded, the scores
 REFRESH = []    # what to redraw when the place changes
+SCORE_REFRESH = []   # what to redraw when the tolerance or the metric changes
+SCORING = {"metres": TOLERANCE_M, "metric": "F1"}
 BEST = ["Sentinel-2", "Stage 1", "Stage 2", "no real difference"]
+_SWITCHES = {"metres": [], "metric": []}
+_BUSY = [False]
 
 
 def _place_needed():
     if "place" not in S:
-        display(W.HTML(_note("<b>Run the cell of step 1 first</b>, then run this cell again.",
+        display(W.HTML(_note("<b>Run the cell of step 2 first</b>, then run this cell again.",
                              "#b00020")))
         return False
     return True
@@ -15,6 +19,43 @@ def _place_needed():
 def _refresh_all():
     for redraw in REFRESH:
         redraw()
+
+
+# ---- the scoring switches: every copy shows the same value, and every score follows ---------
+
+def _on_switch(change, key):
+    if _BUSY[0]:
+        return
+    _BUSY[0] = True
+    try:
+        SCORING[key] = change["new"]
+        for w in _SWITCHES[key]:
+            w.value = change["new"]          # the other copies follow
+    finally:
+        _BUSY[0] = False
+    for redraw in SCORE_REFRESH:
+        redraw()
+
+
+def _switch(key):
+    if key == "metres":
+        w = W.ToggleButtons(options=[("pixel-exact", 0), ("within 2.5 m", 2.5),
+                                     ("within 5 m", 5)], value=SCORING["metres"],
+                            description="A pixel counts", style={"button_width": "105px",
+                                                                 "description_width": "150px"},
+                            tooltips=["the two maps must agree on the very pixel",
+                                      "one pixel of shift is forgiven",
+                                      "two pixels of shift are forgiven"])
+    else:
+        w = W.ToggleButtons(options=METRICS, value=SCORING["metric"], description="Score",
+                            style={"button_width": "70px", "description_width": "150px"})
+    w.observe(lambda change: _on_switch(change, key), names="value")
+    _SWITCHES[key].append(w)
+    return w
+
+
+def _switches(metric=True):
+    return W.VBox([_switch("metres")] + ([_switch("metric")] if metric else []))
 
 
 # ---- a viewer: move and zoom, the picture follows -------------------------------------------
@@ -55,7 +96,44 @@ def _task_buttons(value="buildings"):
                            style={"button_width": "110px", "description_width": "150px"})
 
 
-# ---- step 1: pick your place ----------------------------------------------------------------
+# ---- step 1: the model at home --------------------------------------------------------------
+
+def model_at_home(url):
+    """The land-cover model on hand-labelled OpenEarthMap tiles: scores and three examples."""
+    try:
+        S["oem"] = oem = get_oem(url)
+    except Exception as exc:  # no network, wrong address: say so, do not crash
+        display(W.HTML(_note(f"Could not load the data: {_html.escape(str(exc))}", "#b00020")))
+        return
+    chart = W.Image(format="png", layout=W.Layout(width="720px"))
+    table = W.HTML()
+    tile = W.ToggleButtons(options=[(f"example {i + 1}: " +
+                                     str(n).rsplit("_", 1)[0].replace("_", " ").title(), i)
+                                    for i, n in enumerate(oem["ex"]["names"])],
+                           value=0, description="Look at", style={"button_width": "190px",
+                                                                  "description_width": "150px"})
+    example = W.Image(format="png")
+
+    def draw_scores(_=None):
+        m, metric = SCORING["metres"], SCORING["metric"]
+        chart.value = _png(fig_oem_scores(oem, metric, m))
+        tab = oem_table(oem, m).copy()
+        tab.index = [f"{t}, {i}" for t, i in tab.index]
+        table.value = tab.to_html(float_format="%.2f")
+
+    def draw_example(_=None):
+        example.value = _png(fig_oem_example(oem, tile.value))
+    tile.observe(draw_example, names="value")
+    SCORE_REFRESH.append(draw_scores)
+    draw_scores()
+    draw_example()
+    ui = W.VBox([_switches(), chart, table, W.HTML("<br>"), tile, example])
+    ui.tile = tile
+    UI["home"] = ui
+    display(ui)
+
+
+# ---- step 2: pick your place ----------------------------------------------------------------
 
 def pick_place(url):
     """A menu of the five places: choosing one loads it, and every step below follows."""
@@ -69,11 +147,8 @@ def pick_place(url):
         status.value = _note(f"Loading {_html.escape(menu.value)} ...")
         try:
             S["place"] = Place(menu.value, url)
-            S.pop("table", None)
-            S.pop("hits", None)
             ANSWERS["PLACE"] = menu.value
-            p = S["place"]
-            status.value = _note(_html.escape(repr(p)), "#555")
+            status.value = _note(_html.escape(repr(S["place"])), "#555")
             if holder.children:
                 _refresh_all()          # every step below follows the new place
             else:
@@ -91,28 +166,29 @@ def pick_place(url):
     load()
 
 
-# ---- step 2: guess --------------------------------------------------------------------------
+# ---- step 3: guess --------------------------------------------------------------------------
 
-def step2_guess():
+def guess():
     UI["guess"] = ask(("GUESS_BUILDINGS", "Which image will give the best map of buildings?",
                        BEST),
                       ("GUESS_ROADS", "And the best map of roads?", BEST))
 
 
-# ---- step 3: the maps -----------------------------------------------------------------------
+# ---- step 4: the maps -----------------------------------------------------------------------
 
-def step3_maps():
+def show_maps():
     if not _place_needed():
         return
     viewer = Viewer(fig_landcover, size_m=1000)
-    UI["view3"] = viewer
+    UI["maps"] = viewer
     display(viewer.box)
 
 
-# ---- step 4: the scores ---------------------------------------------------------------------
+# ---- step 5: the scores ---------------------------------------------------------------------
 
-def step4_scores():
-    """A button that shows the scores (after you have guessed)."""
+def show_scores():
+    """A button that shows the scores (after you have guessed); the switches change how they
+    are counted."""
     if not _place_needed():
         return
     show = W.Button(description="Show the scores", button_style="primary", icon="eye",
@@ -122,25 +198,25 @@ def step4_scores():
     def draw(_=None):
         if not show.disabled:
             return                      # not revealed yet
-        p = S["place"]
-        table = score_table(p)
+        p, m, metric = S["place"], SCORING["metres"], SCORING["metric"]
+        table = score_table(p, m)
         S["table"] = table
-        guess = {"buildings": ANSWERS.get("GUESS_BUILDINGS"),
-                 "roads": ANSWERS.get("GUESS_ROADS")}
+        guesses = {"buildings": ANSWERS.get("GUESS_BUILDINGS"),
+                   "roads": ANSWERS.get("GUESS_ROADS")}
         tab = table.copy()
         tab.index = [f"{t}, {i}" for t, i in tab.index]
         out.children = (
             W.HBox([W.Image(value=_png(fig_reference(p)), format="png",
                             layout=W.Layout(width="400px")),
                     W.Image(value=_png(fig_scores(table, f"{p.name}: the land-cover model "
-                                                          "against the public maps")),
+                                                         "against the public maps", metric)),
                             format="png", layout=W.Layout(width="560px"))]),
-            W.HTML(_pre("\n".join(guess_lines(table, guess)))),
+            W.HTML(_pre("\n".join(guess_lines(table, guesses, metric)))),
             W.HTML(tab.to_html(float_format="%.2f")))
 
     def reveal(_):
         if not (ANSWERS.get("GUESS_BUILDINGS") and ANSWERS.get("GUESS_ROADS")):
-            note.value = _note("Make both guesses in step 2 first (or press again to see the "
+            note.value = _note("Make both guesses in step 3 first (or press again to see the "
                                "scores without a guess).", "#b00020")
             if not note.warned:
                 note.warned = True
@@ -153,58 +229,26 @@ def step4_scores():
     note.warned = False
     show.on_click(reveal)
     REFRESH.append(draw)
-    ui = W.VBox([show, note, out])
+    SCORE_REFRESH.append(draw)
+    ui = W.VBox([_switches(), show, note, out])
     ui.show = show
     UI["scores"] = ui
     display(ui)
 
 
-# ---- step 5: hunt ---------------------------------------------------------------------------
+# ---- step 6: hunt ---------------------------------------------------------------------------
 
-def step5_hunt():
+def hunt():
     if not _place_needed():
         return
-    viewer = Viewer(fig_errors, size_m=500, extra=[_task_buttons()])
-    UI["view5"] = viewer
+    viewer = Viewer(fig_errors, size_m=500,
+                    extra=[_task_buttons(), _switch("metres"), _switch("metric")])
+    UI["hunt"] = viewer
     display(viewer.box)
     UI["finds"] = ask(("RESCUE", "A rescue: something Sentinel-2 missed and super-resolution "
                        "found", "text"),
                       ("FAILURE", "A failure: something the super-resolved map gets wrong",
                        "text"))
-
-
-# ---- step 6: decision and verdict -----------------------------------------------------------
-
-def step6_decision():
-    if not _place_needed():
-        return
-    task = _task_buttons()
-    budget = W.IntSlider(value=10, min=3, max=30, step=1, continuous_update=False,
-                         description="Squares you can visit", layout=_WIDE, style=_LABEL)
-    image = W.Image(format="png")
-    text = W.HTML()
-
-    def draw(_=None):
-        fig, hits, summary = decision(S["place"], task.value, budget.value)
-        S["hits"], S["decision"] = hits, (task.value, budget.value)
-        image.value = _png(fig)
-        text.value = _pre(summary)
-    for w in (task, budget):
-        w.observe(draw, names="value")
-    REFRESH.append(draw)
-    draw()
-    ui = W.VBox([task, budget, image, text])
-    ui.task, ui.budget = task, budget
-    UI["decision"] = ui
-    display(ui)
-
-
-def step6_verdict():
-    UI["verdict"] = ask(
-        ("VERDICT_FOR", "For which use? (for example: a screening map of built-up areas)",
-         "text"),
-        ("VERDICT", "Your verdict", ["deploy", "pilot", "do not use"]),
-        ("WOULD_CHANGE_MY_MIND", "What would change your mind?", "text"))
 
 
 # ---- the result card ------------------------------------------------------------------------
@@ -214,25 +258,21 @@ def card_text():
         v = ANSWERS.get(key)
         return "(not answered)" if v in ("", None) else v
 
-    lines = ["=" * 68, f"PLACE     {get('PLACE')}"]
+    m = SCORING["metres"]
+    lines = ["=" * 68, f"PLACE     {get('PLACE')}", f"SCORED    {tol_text(m)}"]
     if "place" in S:
-        table = S.get("table")
-        if table is None:
-            table = score_table(S["place"])
-        for t in TASK_CLASS:
-            f1 = table["F1"][t]
-            lines.append(f"F1        {t:<10} " + ", ".join(f"{i} {f1[i]:.2f}" for i in INPUTS))
-    if "hits" in S:
-        t, b = S["decision"]
-        lines.append(f"DECISION  {t}, {b} squares: hits " +
-                     ", ".join(f"{i} {S['hits'][i]}" for i in INPUTS))
+        table = score_table(S["place"], m)
+        for metric in METRICS:
+            for t in TASK_CLASS:
+                v = table[metric][t]
+                base = table.attrs["everywhere"][t][metric]
+                lines.append(f"{metric:<4} {t:<10} " + ", ".join(f"{i} {v[i]:.2f}" for i in INPUTS)
+                             + f"  (everywhere {base:.2f})")
     lines += ["-" * 68,
               f"my guess, buildings:     {get('GUESS_BUILDINGS')}",
               f"my guess, roads:         {get('GUESS_ROADS')}",
               f"rescued by SR:           {get('RESCUE')}",
               f"failure:                 {get('FAILURE')}",
-              f"VERDICT for {get('VERDICT_FOR')}: {get('VERDICT')}",
-              f"what would change it:    {get('WOULD_CHANGE_MY_MIND')}",
               "=" * 68]
     return "\n".join(lines)
 
@@ -244,4 +284,24 @@ def result_card():
     ui = W.VBox([card, again])
     ui.card, ui.again = card, again
     UI["card"] = ui
+    display(ui)
+
+
+# ---- for the discussion: all places, and a model trained on each input ----------------------
+
+def all_places_view(url, own_model=False):
+    """Bars and a table for all five places; the switches change how they are counted."""
+    summary = get_summary(url)
+    chart = W.Image(format="png")
+    table = W.HTML()
+
+    def draw(_=None):
+        m, metric = SCORING["metres"], SCORING["metric"]
+        chart.value = _png(fig_all_places(summary, metric, m, own_model))
+        value = f"own_model_{metric}" if own_model else metric
+        table.value = all_places(summary, value, m).to_html(float_format="%.2f")
+    SCORE_REFRESH.append(draw)
+    draw()
+    ui = W.VBox([_switches(), chart, table])
+    UI["own" if own_model else "all"] = ui
     display(ui)

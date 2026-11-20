@@ -34,10 +34,11 @@ go with the SSTA workshop sessions:
   Pick one of five places, look at the inputs and both stages, run one dial experiment, and
   answer four questions (about 20 minutes, no coding).
 - [`demo2_use_cases.ipynb`](notebooks/demo2_use_cases.ipynb): from images to maps, for the
-  same five places. A land-cover model trained on real high-resolution images was run on
-  Sentinel-2, stage 1 and stage 2 before the workshop; participants score the maps against
-  Open Buildings and OpenStreetMap, look for rescues and failures, and use the map for a
-  decision. Needs no key and no GPU.
+  same five places. A land-cover model trained on real high-resolution images is first scored
+  on hand-labelled OpenEarthMap tiles, then on Sentinel-2, stage 1 and stage 2 of each place
+  (run before the workshop); participants score the maps against Open Buildings and
+  OpenStreetMap (F1 or IoU, pixel-exact or within 2.5 / 5 m), look for rescues and failures,
+  and read a short section on fine-tuning. Needs no key and no GPU.
 
 The notebooks are generated: edit `tools/demos/` (`places.py`, the helper files and the
 `build_*.py` scripts) and rebuild, do not edit the `.ipynb` files.

@@ -23,7 +23,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
 exec((Path(__file__).parent / "old_d2_helpers.py").read_text())  # the verified Nov 2 code
-# the notebook's own scoring (5 m tolerance), so the package and the notebook agree
+# the notebook's own scoring (tolerances 0 / 2.5 / 5 m, F1 and IoU), so the package and
+# the notebook agree
 exec((Path(__file__).parent / "d2_helpers.py").read_text())
 
 from places import AREA_KM, PLACES  # noqa: E402
@@ -51,21 +52,26 @@ def to_uint16(da):
 
 
 def score_rows(images, maps, refs, valid, own_model=True):
-    """Scores of each input for each task. ``images[inp].values`` is a (4, y, x) array."""
-    rows = {}
+    """Scores of each input for each task, at every tolerance of the notebook.
+    ``images[inp].values`` is a (4, y, x) array. -> {tolerance: {task: {...}}}"""
+    rows = {tol_key(m): {} for m in TOLERANCES}
+    h, w = valid.shape
+    cols = np.broadcast_to(np.arange(w), (h, w))
+    test = valid & (cols >= w // 2 + 10)          # the own model's test half (train_and_test)
     for task, cls in TASKS.items():
-        rows[task] = {"reference_share": float(refs[task][valid].mean()),
-                      "everywhere_F1": round(float(
-                          scores(np.ones_like(valid), refs[task], valid)["F1"]), 4)}
-        truth = per_cell(refs[task], valid)
-        for inp in INPUTS:
-            s = scores(maps[inp] == cls, refs[task], valid)
-            est = per_cell(maps[inp] == cls, valid)
-            ok = np.isfinite(est) & np.isfinite(truth)
-            s["density_r"] = float(np.corrcoef(est[ok], truth[ok])[0, 1])
-            if own_model:
-                s["own_model_F1"] = float(train_and_test(images[inp], refs[task], valid)[0])
-            rows[task][inp] = {k: round(float(v), 4) for k, v in s.items()}
+        own = ({inp: train_and_test(images[inp], refs[task], valid)[1] for inp in INPUTS}
+               if own_model else {})
+        for m in TOLERANCES:
+            k = tol_key(m)
+            ev = scores(np.ones_like(valid), refs[task], valid, m)
+            rows[k][task] = {"reference_share": round(float(refs[task][valid].mean()), 4),
+                             "everywhere": {x: round(float(ev[x]), 4) for x in METRICS}}
+            for inp in INPUTS:
+                s = scores(maps[inp] == cls, refs[task], valid, m)
+                if own_model:
+                    o = scores(own[inp], refs[task], test, m)
+                    s.update({f"own_model_{x}": o[x] for x in METRICS})
+                rows[k][task][inp] = {x: round(float(v), 4) for x, v in s.items()}
     return rows
 
 
@@ -85,10 +91,13 @@ def rescore(out):
         refs = {t: z[f"ref_{t}"].astype(bool) for t in TASKS}
         rows = score_rows(images, maps, refs, z["valid"].astype(bool))
         meta["scores"] = entry["scores"] = rows
-        meta["tolerance_m"] = entry["tolerance_m"] = TOLERANCE_M
+        meta["tolerances_m"] = entry["tolerances_m"] = TOLERANCES
+        meta.pop("tolerance_m", None)
+        entry.pop("tolerance_m", None)
         z["meta"] = json.dumps(meta)
         np.savez_compressed(out / entry["file"], **z)
-        print(name, {t: [rows[t][i]["F1"] for i in INPUTS] for t in TASKS}, flush=True)
+        print(name, {t: [rows[tol_key(TOLERANCE_M)][t][i]["F1"] for i in INPUTS] for t in TASKS},
+              flush=True)
     summary_file.write_text(json.dumps(summary, indent=1))
 
 
@@ -129,7 +138,7 @@ def main():
                 "warnings": [w["code"] for w in job.warnings],
                 "n_buildings": int(len(buildings)), "n_road_segments": int(len(roads)),
                 "classes": LC_CLASSES, "class_colours": LC_COLOURS, "scores": rows,
-                "tolerance_m": TOLERANCE_M}
+                "tolerances_m": TOLERANCES}
         np.savez_compressed(
             out / f"{slug(name)}.npz",
             s2=to_uint16(images["Sentinel-2"]), stage1=to_uint16(images["Stage 1"]),
@@ -139,10 +148,10 @@ def main():
             meta=json.dumps(meta))
         summary[name] = {"file": f"{slug(name)}.npz", **{k: meta[k] for k in (
             "lat", "lon", "date", "note", "warnings", "n_buildings", "n_road_segments",
-            "scores", "tolerance_m")}}
+            "scores", "tolerances_m")}}
         summary_file.write_text(json.dumps(summary, indent=1))
         size = (out / f"{slug(name)}.npz").stat().st_size / 1e6
-        f1 = {t: [rows[t][i]["F1"] for i in INPUTS] for t in TASKS}
+        f1 = {t: [rows[tol_key(TOLERANCE_M)][t][i]["F1"] for i in INPUTS] for t in TASKS}
         print(f"{name}: {size:.1f} MB, {time.time() - t0:.0f} s, warnings {meta['warnings']}, "
               f"F1 (S2, Stage 1, Stage 2) {f1}", flush=True)
 

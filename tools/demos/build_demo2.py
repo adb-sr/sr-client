@@ -37,6 +37,65 @@ place_default = "Cebu City and Mandaue"
 assert place_default in PLACES
 place_rows = "\n".join(f"| **{name}** | {p['note']} |" for name, p in PLACES.items())
 
+OEM_TEXT = r"""
+**What it shows** (within 2.5 m):
+
+* From the **aerial** image the model is very good: F1 0.88 for buildings, 0.76 for roads.
+  This is what it was built for.
+* From **Sentinel-2** it is close to useless: 0.26 for buildings and 0.13 for roads, below
+  the dashed line (0.40 and 0.25).
+* **Stage 1** (0.55 and 0.46) and **Stage 2** (0.66 and 0.54) are in between. Stage 2 closes
+  about two thirds of the gap between Sentinel-2 and the aerial image, for buildings and for
+  roads (a little over half pixel-exact, about three quarters within 5 m).
+* The three examples are a good, a typical and a poor tile for Stage 2, not the best ones.
+  Look at what Stage 2 gets right (which blocks are built up, the main roads) and what it
+  does not (the exact shape of each building, narrow paths).
+
+So the model works on super-resolved images, but not as well as on a real aerial image. Keep
+that in mind as you leave home: do not expect it to do better in the Philippines than here.
+"""
+
+RESULTS_TEXT = r"""
+**What we found** (our run before the workshop; scores within 2.5 m unless said otherwise):
+
+* **Buildings**: the score rises with every step, in every place: F1 0.21 to 0.32 on
+  Sentinel-2, 0.48 to 0.56 on Stage 1, 0.65 to 0.75 on Stage 2 (pixel-exact 0.53 to 0.60;
+  within 5 m 0.74 to 0.84). Stage 2 finds 64 to 78 % of the buildings, and 67 to 79 % of what
+  it marks is right. But in the four cities a map that says "building" everywhere already
+  scores 0.54 to 0.72: Stage 2 is above that line by only 0.02 to 0.11. Where almost
+  everything is built up, the map adds little to "it is all built up". In Nueva Ecija, with
+  few buildings, the line is at 0.16 and Stage 2 (0.74) is far above it.
+* **Roads**: on Sentinel-2 the model finds almost no roads in four of the five places (F1
+  0.01 to 0.09); only around ADB headquarters, where the avenues are wide, does it reach
+  0.25. Stage 2 reaches 0.29 to 0.61 and is clearly above the "roads everywhere" line (0.30
+  to 0.36 in the cities, 0.09 in Nueva Ecija) in every place except Cebu (0.29 against 0.30),
+  where the streets between small houses are too narrow. Stage 2 finds 25 to 54 % of the
+  roads, and 36 to 71 % of what it marks is right: it misses roads more often than it invents
+  them. The largest gain is for the farm roads of Nueva Ecija (0.01 to 0.61).
+* **The tolerance changes the level, not the order.** Forgive more shift and every score
+  rises, the dashed line too. The order of the three images never changes, and the lead of
+  Stage 2 over the line moves by a few hundredths (Cebu roads go from just above the line,
+  pixel-exact, to just below it). IoU gives lower numbers than F1 and the same order.
+* **At home and away.** Here Stage 2 reaches F1 0.65 to 0.75 for buildings and 0.29 to 0.61
+  for roads (within 2.5 m); at home it reached 0.66 and 0.54. About the same, in spite of the
+  new country and the imperfect public maps, but the two are not strictly comparable (other
+  labels, other places). And the dashed line is far higher in the dense cities here (0.54 to
+  0.72 for buildings) than at home (0.40), so the same F1 is worth less here.
+
+This is the pattern of Session 3: a model trained on real high-resolution images cannot read
+a 10 m image, and super-resolution lets it work on free Sentinel-2. In a dense city, check
+the map against the dashed line before you trust it.
+"""
+
+OWN_TEXT = r"""
+With a model trained on each image (within 2.5 m): buildings 0.63 to 0.80 on Sentinel-2
+against 0.62 to 0.78 on Stage 2; roads 0.25 to 0.37 against 0.24 to 0.38. This quick model
+only looks at colours and textures around each pixel and is scored on the east half only, so
+it is a rough test. Even so, trained on Sentinel-2 alone it reaches about the level the
+land-cover model reached on Stage 2 for buildings.
+"""
+
+
 md(r"""
 # Practical demonstration 2: from super-resolved images to maps
 
@@ -46,13 +105,24 @@ md(r"""
 
 Session 3 ended with a rule: **before you use super-resolution for a task, test it on a small
 labelled sample.** In this notebook you run that test for the place you worked on this
-morning, and you end with a verdict: would you **deploy** it, **pilot** it, or **not use**
-it?
+morning.
+
+**The model.** Everything here uses one **land-cover model**. It starts from SatlasPretrain
+(Allen Institute for AI) and was fine-tuned on OpenEarthMap: aerial and satellite images of
+0.25 to 0.5 m from 44 countries, labelled by hand. It gives every pixel one of 8 classes
+(bare land, rangeland, developed space, road, tree, water, agriculture, building). It was
+trained on **real high-resolution images only**: it has never seen Sentinel-2 or a
+super-resolved image, and it has never seen the Philippines. We use it as it is. It is the
+model behind the road result in Session 3.
+
+So first you see how good the model is **at home**, on images like the ones it learned from
+(step 1). Then you take it to **your place** and feed it three versions of the same image
+(steps 2 to 6).
 
 Work in pairs again. **About 25 minutes, six steps.** You do not need to write code:
 
 * **run each grey cell once**, from top to bottom, with **Shift + Enter** (or the ▶ button);
-* then use the **menus, buttons and sliders that appear under the cell**. They act at once,
+* then use the **menus, buttons and switches that appear under the cell**. They act at once,
   and your answers are saved as you type. You never need to run a cell twice.
 
 Nothing needs a key or a GPU: the images and the maps were made before the workshop, and the
@@ -60,19 +130,19 @@ notebook only downloads them.
 
 | Step | What you do | Time |
 |---|---|---|
-| 1 | Pick your place and look at the three images | 3 min |
-| 2 | **Guess first**: which image will give the best map? | 1 min |
-| 3 | See the maps a land-cover model draws from each image | 3 min |
-| 4 | Score them against public maps, and check your guess | 4 min |
-| 5 | Hunt: find one place where super-resolution rescued the map and one where it failed | 6 min |
-| 6 | Use the map for a decision, and give your **verdict** | 8 min |
+| 1 | The model at home: how good is it on hand-labelled tiles? | 4 min |
+| 2 | Pick your place and look at the three images | 3 min |
+| 3 | **Guess first**: which image will give the best map? | 1 min |
+| 4 | See the maps the model draws from each image | 3 min |
+| 5 | Score them against public maps, and check your guess | 5 min |
+| 6 | Hunt: find one place where super-resolution rescued the map and one where it failed | 7 min |
 
 The four steps of Session 3 are all here:
 
 | Session 3 | In this notebook |
 |---|---|
 | 1. Label | public maps: Open Buildings (structures) and OpenStreetMap (roads) |
-| 2. Train | a land-cover model that was already trained on real high-resolution images |
+| 2. Train | the land-cover model, already trained on real high-resolution images |
 | 3. Use | we ran it on Sentinel-2, on Stage 1 and on Stage 2 (before the workshop) |
 | 4. Score | you compare each map with the public maps |
 """)
@@ -87,11 +157,47 @@ code('# @title Helper functions (run this cell; you do not need to read it) { di
      + (HERE / "widgets_common.py").read_text() + "\n\n"
      + (HERE / "d2_widgets.py").read_text(), hidden=True)
 
-md(rf"""
-## 1. Pick your place *(3 minutes)*
+md(r"""
+## 1. The model at home *(4 minutes)*
 
-Take the place you used this morning, so you already know what its images look like. (If you
-used your own place this morning, take the listed place you know best.)
+Before we take the model to the Philippines, look at how it does on home ground:
+**79 OpenEarthMap tiles** of 500 m from 13 cities in Europe, Africa and Asia that
+the model was **not trained on**, with every pixel labelled by hand on the aerial image.
+Labels do not get cleaner than this, so this is the best case.
+
+For each tile there are four images of the same place:
+
+* **aerial**: the real 0.5 m image the labels were drawn on. This is what the model knows.
+* **Sentinel-2** (enlarged), **Stage 1** and **Stage 2**: the same three versions you will see
+  for your place. The Sentinel-2 images are from 2025 and the aerial images are older, so a
+  few buildings may have changed; that counts a little against these three.
+
+**How the scores work** (the same in the whole notebook):
+
+* **found**: the share of the true buildings (or roads) that the model found;
+  **correct**: the share of the model's buildings that are right.
+* **F1** combines the two: 0 = nothing right, 1 = perfect. **IoU** (intersection over
+  union) is the share both maps agree on, out of everything either map calls a building. It
+  is always lower than F1 (IoU = F1 / (2 − F1)) and ranks the images in the same order; it is
+  the number most papers report.
+* **A pixel counts**: two maps never line up to the metre. *Pixel-exact* counts only the very
+  same pixel; *within 2.5 m* forgives a shift of one pixel; *within 5 m* forgives two. The
+  more you forgive, the higher every score.
+* **The dashed line** is the score of a useless map that says "building" (or "road")
+  everywhere. A map is only worth something where it is clearly above that line.
+
+Run the cell and try the switches: they change every score in this notebook. Then click
+through the three example tiles.
+""")
+code("model_at_home(DATA_URL)")
+md(OEM_TEXT)
+
+md(rf"""
+## 2. Pick your place *(3 minutes)*
+
+Now the model leaves home. Take the place you used this morning, so you already know what its
+images look like. (If you used your own place this morning, take the listed place you know
+best.)
 
 | Place | What is there |
 |---|---|
@@ -111,65 +217,58 @@ step below follows: there is nothing to run again.
 code("pick_place(DATA_URL)")
 
 md(r"""
-## 2. Guess first *(1 minute)*
+## 3. Guess first *(1 minute)*
 
-A land-cover model will draw a map from each of the three images. It was trained on **real
-high-resolution images** and has never seen a super-resolved one. We then check its
-**buildings** and its **roads** against public maps.
+At home, the map from Stage 2 came much closer to the map from the aerial image than the map
+from Sentinel-2 did. Will that hold here? The model has never seen the Philippines: the roofs,
+the streets and the light are different, and instead of hand-drawn labels we check it against
+public maps.
 
-Which image will give the best map? Agree on a guess and click it before you go on.
+Which image will give the best map of **buildings**, and of **roads**? Agree on a guess and
+click it before you go on.
 """)
-code("step2_guess()")
+code("guess()")
 
 md(r"""
-## 3. The maps *(3 minutes)*
-
-The model starts from SatlasPretrain (Allen Institute for AI) and was fine-tuned on
-OpenEarthMap: aerial and satellite images from 44 countries, labelled by hand. It gives
-every 2.5 m pixel one of 8 classes. It is the model behind the road result in Session 3.
+## 4. The maps *(3 minutes)*
 
 This is the **"reuse"** path from Session 3: nobody labelled anything on super-resolved
-images. We only fed the model three different images of your place.
+images. We only fed the land-cover model three different images of your place.
 
 Top row: the three images. Bottom row: the map the model drew from each. Move around and
 compare. Where do the maps differ most?
 """)
-code("step3_maps()")
+code("show_maps()")
 
 md(r"""
-## 4. Score against public maps *(4 minutes)*
+## 5. Score against public maps *(5 minutes)*
 
-The reference is two public maps that anyone can download for any place in the Philippines:
+There are no hand-drawn labels for your place. The reference is two public maps that anyone
+can download for any place in the Philippines:
 
 * **Open Buildings**: building footprints from Google, Microsoft and OpenStreetMap, combined
   by VIDA. They were made by a model from 50 cm images, so they are good but not perfect.
 * **OpenStreetMap roads** (through Overture Maps). Roads are lines, so each one is widened to
   a typical width for its class (12 m for a motorway, 3 m for a farm track).
 
-Two maps of the same place never line up to the metre, so a building (or road) pixel counts
-as **found** if the model marks one **within 5 m** of it (two pixels), and a pixel of the
-model counts as **correct** if the public map has one within 5 m. *found* is the share of the
-public map that the model found; *correct* is the share of the model's map that is right.
-**F1** combines the two: 0 = nothing right, 1 = perfect.
-
-**The dashed line** is the score of a useless map that says "building" (or "road")
-everywhere. In a dense city it is high, because almost every spot is within 5 m of a
-building. A map is only worth something where it is clearly above that line.
-
+The scores work as in step 1, and the switches are the same (changing one changes all).
 Press **Show the scores** to see them, and whether your guess was right.
 """)
-code("step4_scores()")
+code("show_scores()")
 md(r"""
-Compare the three inputs with each other and with the dashed line, not with 1. The public
-maps are not perfect either: a missing road in OpenStreetMap counts against the model.
+Compare the three images with each other and with the dashed line, not with 1, and not with
+step 1: the public maps were not drawn on these images, so even a perfect model would not
+reach 1. A missing road in OpenStreetMap counts against the model. Try the three tolerances:
+which conclusions change, and which stay?
 """)
 
 md(r"""
-## 5. Hunt: one rescue, one failure *(6 minutes)*
+## 6. Hunt: one rescue, one failure *(7 minutes)*
 
 A score hides where the map is right and where it is wrong. Look for yourself. In the bottom
-row, **green** is right (the two maps agree within 5 m), **blue** is a false alarm (only the
-model says "building") and **red** is missed (only the public map says so).
+row, **green** is right (the two maps agree, within the tolerance you chose), **blue** is a
+false alarm (only the model says "building") and **red** is missed (only the public map says
+so).
 
 Move the view and find:
 
@@ -178,42 +277,14 @@ Move the view and find:
 * a **failure**: something the super-resolved map gets wrong. Is it a miss, a false alarm, or
   a building in the wrong shape? Could the public map be the one that is wrong?
 
-You know this place: use that. Switch between **buildings** and **roads** with the buttons,
-and write your two finds in the blue box (a few words each).
+You know this place: use that. Switch between **buildings** and **roads**, try
+**pixel-exact** against **within 5 m** (a blue strip next to a red strip is often the same
+building, a few metres apart), and write your two finds in the blue box (a few words each).
 """)
-code("step5_hunt()")
-
-md(r"""
-## 6. From a map to a decision *(8 minutes)*
-
-Maps are used to decide something. Here is one such decision, the same kind you will work on
-in tomorrow's hackathon:
-
-> Your team can visit only a few 250 m squares of this area (to survey housing, or to check
-> road condition). You send the team to the squares where the map shows the **most**
-> buildings (or roads). How many of those visits go to the right squares?
-
-A pick counts as a **hit** if the square is truly among the densest according to the public
-map. Move the slider (how many squares you can visit) and switch between buildings and
-roads, and watch whether super-resolution changes the number of hits. A better F1 does not always change the decision.
-With so few squares, one hit more or less can be chance: try several budgets before you
-conclude.
-""")
-code("step6_decision()")
-md(r"""
-**Your verdict.** For the use you have in mind at your place, would you:
-
-* **deploy**: use maps from super-resolved images as they are;
-* **pilot**: try it on a larger area with proper labels and field checks first;
-* **not use** it: plain Sentinel-2 is as good, or the errors are too costly.
-
-"Super-resolution does not help here" is a perfectly good result.
-""")
-code("step6_verdict()")
+code("hunt()")
 md(r"""
 **Your result card.** Run the cell; if you change an answer afterwards, press **Update the
-card**. Enter your verdict in the poll (the link is on the slide), and be ready to say in one
-sentence why.
+card**. Enter your guess and your rescue or failure in the poll (the link is on the slide).
 """)
 code("result_card()")
 
@@ -224,61 +295,71 @@ md(r"""
 The same scores for every place. Where does super-resolution help most? Where does it make
 no difference? Is that what Session 3 would predict?
 """)
-code(r"""
-summary = get_summary(DATA_URL)
-show_all_places(summary).round(2)
-""")
-md(r"""
-**What we found** (our run before the workshop):
-
-* **Buildings**: the score rises with every step, in every place: F1 0.26 to 0.37 on
-  Sentinel-2, 0.58 to 0.66 on Stage 1, 0.74 to 0.84 on Stage 2. Stage 2 finds 72 to 86 % of
-  the buildings, and 76 to 88 % of what it marks is right. But in the four cities, a map
-  that says "building" everywhere already scores 0.62 to 0.79: only Stage 2 is above that
-  line, and only a little. Where almost everything is built up, *where are the buildings?*
-  is not the useful question; *where are they denser?* is (step 6). In Nueva Ecija, with
-  few buildings, the line is at 0.22 and Stage 2 (0.84) is far above it.
-* **Roads**: on Sentinel-2 the model finds almost no roads in four of the five places (F1
-  0.01 to 0.11); only around ADB headquarters, where the avenues are wide, does it reach
-  0.29. Stage 2 reaches 0.39 to 0.69 and is above the "roads everywhere" line (0.40 to 0.46
-  in the cities, 0.12 in Nueva Ecija) in every place except Cebu, where the streets between
-  small houses are too narrow. Stage 2 finds 32 to 60 % of the roads, and 50 to 82 % of what
-  it marks is right: it misses roads more often than it invents them. The largest gain is
-  for the farm roads of Nueva Ecija (0.02 to 0.69).
-* **The decision changes less than the score.** With 10 squares to visit for buildings, the
-  hits were 4, 5 and 5 (Sentinel-2, Stage 1, Stage 2) at ADB headquarters, 4, 4 and 4 at
-  DHSUD, 2, 3 and 1 in Cebu, but 3, 4 and 8 in Nueva Ecija. In a dense city almost every
-  square is built up, so a sharper map hardly changes which squares come first. Where
-  buildings are few and scattered, it does.
-
-This is the pattern of Session 3: a model trained on real high-resolution images cannot read
-a 10 m image, and super-resolution lets it work on free Sentinel-2. Whether that changes
-what you would *do* depends on the decision.
-""")
+code("all_places_view(DATA_URL)")
+md(RESULTS_TEXT)
 
 md(r"""
-## If you have time
+## 7. Going further: fine-tune the model
 
-**Reuse a model, or train your own?** So far we *reused* a model trained on real
-high-resolution images. The other path in Session 3 is to *train a model on the images you
-will use*. Before the workshop we also trained a quick, simple model on each input (on the
-west half of each area, scored on the east half). The table shows its F1.
-""")
-code(r"""
-all_places(summary, "own_model_F1").round(2)
-""")
-md(r"""
-**The gap disappears.** When a model is trained on each input, the three inputs score about
-the same (buildings: 0.73 to 0.87 on Sentinel-2 against 0.72 to 0.87 on Stage 2; roads: 0.35
-to 0.50 against 0.35 to 0.51). This quick model only looks at colours and textures around
-each pixel, so it is a rough test, but it shows what part of the gain above is: super-resolution
-makes Sentinel-2 *look like* the images that existing models were trained on. So:
+We used the land-cover model **as it is**. It learned from aerial images of other countries,
+and in steps 5 and 6 you saw what that costs: narrow streets it does not know, roofs it takes
+for roads. The usual next step is to **fine-tune** it: keep everything it has learned, and
+train it a little more on labelled examples from your own area.
+
+**What you need**
+
+* **Labels for your area.** Public maps (Open Buildings, OpenStreetMap) are a start, but you
+  saw their errors; a few hundred tiles checked or drawn by people who know the place are
+  worth more.
+* **The images you will use.** Fine-tune on the same kind of image you will run the model on:
+  if you will map from Stage 2, fine-tune on Stage 2.
+* **A test area the model never sees during training**, to score it honestly, in the same way
+  as in step 5.
+* **A GPU for a few hours** (a free Colab GPU is enough for a first try).
+
+In code it looks roughly like this (a sketch, not run here):
+
+```python
+import torch
+from satlaspretrain_models.model import Model
+from satlaspretrain_models.utils import Backbone, Head
+
+model = Model(num_channels=3, multi_image=False, backbone=Backbone.SWINB, fpn=True,
+              head=Head.SEGMENT, num_categories=8, weights=None)
+state = torch.load("landcover_oem_satlas_swinb_fp16.pth")   # from Hugging Face, see below
+model.load_state_dict({k: v.float() for k, v in state.items()})
+
+# keep what it knows: the backbone learns slowly, the rest faster
+backbone = list(model.backbone.parameters())
+rest = [p for n, p in model.named_parameters() if not n.startswith("backbone.")]
+opt = torch.optim.AdamW([{"params": backbone, "lr": 1e-5}, {"params": rest, "lr": 1e-4}],
+                        weight_decay=1e-4)
+model.train()
+for images, labels in tiles_of_your_area:     # (B, 3, H, W) images; (B, H, W) classes 0-7
+    _, loss = model(images, labels)
+    opt.zero_grad()
+    loss.backward()
+    opt.step()
+```
+
+**One trap: compare fairly.** Once you train, train *each* input. Before the workshop we tried
+the simplest version: a quick model trained from scratch on the west half of each area, on
+each of the three images, and scored on the east half. Look at the table below: **the gap
+between the images almost disappears.** Part of what super-resolution gave us above is that
+it makes Sentinel-2 *look like* the images the land-cover model was trained on. A model
+trained on Sentinel-2 itself learns to read Sentinel-2. So:
 
 * if a good model trained on high-resolution images exists for your task, super-resolution
   lets you run it on free Sentinel-2;
-* if you train your own model anyway, test whether super-resolution helps before you rely on
-  it. Sometimes plain Sentinel-2 is just as good.
+* if you train or fine-tune your own model anyway, test whether super-resolution still helps
+  before you rely on it. Sometimes plain Sentinel-2 is just as good.
 
+Tomorrow's hackathon starts here, with expert labels and your own scenario.
+""")
+code("all_places_view(DATA_URL, own_model=True)")
+md(OWN_TEXT)
+
+md(r"""
 **Before you use a map**
 
 * **Check the warnings and the validity map** of every job (this morning's notebook). Near
@@ -299,6 +380,7 @@ on Hugging Face. The script that made this data package is
 ---
 Contains modified Copernicus Sentinel data. Building footprints: Google–Microsoft–OSM Open
 Buildings by VIDA (ODbL). Roads: © OpenStreetMap contributors (ODbL), via Overture Maps.
+OpenEarthMap tiles and labels: OpenEarthMap (Xia et al., 2023), CC BY-NC-SA 4.0.
 Land-cover model: SatlasPretrain (Ai2) fine-tuned on OpenEarthMap; CC BY-NC-SA 4.0,
 non-commercial use.
 """)

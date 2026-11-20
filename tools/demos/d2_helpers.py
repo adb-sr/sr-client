@@ -17,7 +17,9 @@ KEYS = {"Sentinel-2": "s2", "Stage 1": "stage1", "Stage 2": "stage2"}
 COLOURS = {"Sentinel-2": "#a6a6a6", "Stage 1": "#7fbfdf", "Stage 2": "#007DB7"}
 TASK_CLASS = {"buildings": 7, "roads": 3}
 PIXEL_M = 2.5
-TOLERANCE_M = 5      # a pixel counts as found (or correct) if the other map has one this close
+TOLERANCES = [0, 2.5, 5]   # metres: a pixel counts if the other map has one this close
+TOLERANCE_M = 2.5          # the default
+METRICS = ["F1", "IoU"]
 OK_COLOUR, FALSE_COLOUR, MISS_COLOUR = (0.10, 0.70, 0.30), (0.20, 0.45, 0.95), (0.90, 0.20, 0.20)
 
 
@@ -163,87 +165,110 @@ def fig_reference(place, size_m=2000, east_m=0, north_m=0):
 
 # ---- scoring -----------------------------------------------------------------------------
 
-def near(mask, metres=TOLERANCE_M):
+def tol_text(metres):
+    return "pixel-exact" if metres == 0 else f"within {metres:g} m"
+
+
+def tol_key(metres):
+    return f"{metres:g}"
+
+
+def near(mask, metres=TOLERANCE_M, pixel_m=PIXEL_M):
     """True wherever ``mask`` has a pixel within ``metres``."""
-    r = int(metres // PIXEL_M)
+    r = int(round(metres / pixel_m))
     if r == 0:
         return mask
     y, x = np.ogrid[-r:r + 1, -r:r + 1]
     return ndi.binary_dilation(mask, structure=x * x + y * y <= r * r)
 
 
+def from_shares(found, correct):
+    """F1 and IoU from the two shares. IoU = F1 / (2 - F1): always lower than F1, same order."""
+    f1 = 2 * found * correct / max(found + correct, 1e-9)
+    return {"F1": f1, "IoU": f1 / (2 - f1)}
+
+
 def scores(pred, ref, valid, metres=TOLERANCE_M):
     """found: share of the reference's pixels with a model pixel within ``metres``;
     correct: share of the model's pixels with a reference pixel within ``metres``;
-    F1 combines the two (0 = nothing right, 1 = perfect)."""
+    F1 and IoU combine the two (0 = nothing right, 1 = perfect)."""
     found = np.sum(ref & near(pred, metres) & valid) / max(np.sum(ref & valid), 1)
     correct = np.sum(pred & near(ref, metres) & valid) / max(np.sum(pred & valid), 1)
-    return {"F1": 2 * found * correct / max(found + correct, 1e-9), "found": found,
-            "correct": correct}
+    return {**from_shares(found, correct), "found": found, "correct": correct}
 
 
-def everywhere(place, task):
-    """F1 of a useless map that says 'building' (or 'road') everywhere: the line a real map
-    has to beat. In a dense city it is high, because most places are near a building."""
-    return float(scores(np.ones_like(place.valid), place.refs[task], place.valid)["F1"])
+def everywhere(place, task, metres=TOLERANCE_M):
+    """Scores of a useless map that says 'building' (or 'road') everywhere: the line a real
+    map has to beat. In a dense city it is high, because most places are near a building."""
+    s = scores(np.ones_like(place.valid), place.refs[task], place.valid, metres)
+    return {m: float(s[m]) for m in METRICS}
 
 
-def score_table(place):
-    """F1 of each input for buildings and roads, plus the share of the reference that was
-    found (recall) and the share of the model's pixels that are correct (precision)."""
+def score_table(place, metres=TOLERANCE_M):
+    """F1 and IoU of each input for buildings and roads, plus the share of the reference that
+    was found (recall) and the share of the model's pixels that are correct (precision)."""
     rows = []
     for task in TASK_CLASS:
         for inp in INPUTS:
-            s = scores(place.prediction(task, inp), place.refs[task], place.valid)
+            s = scores(place.prediction(task, inp), place.refs[task], place.valid, metres)
             rows.append({"task": task, "input": inp, **{k: round(float(v), 2)
                                                         for k, v in s.items()}})
     table = pd.DataFrame(rows).set_index(["task", "input"])
-    table.attrs["everywhere"] = {t: everywhere(place, t) for t in TASK_CLASS}
+    table.attrs["everywhere"] = {t: everywhere(place, t, metres) for t in TASK_CLASS}
+    table.attrs["metres"] = metres
     return table
 
 
-def fig_scores(table, title):
-    f1 = table["F1"].unstack("input")[INPUTS].loc[list(TASK_CLASS)]
-    fig, ax = plt.subplots(figsize=(7, 3.8))
-    f1.plot.bar(ax=ax, color=[COLOURS[i] for i in INPUTS], rot=0, width=0.75)
+def _bars(ax, values, inputs, base=None, metric="F1", metres=TOLERANCE_M, legend=True):
+    """Grouped bars: rows of ``values`` = groups on the x axis, columns = inputs."""
+    values[inputs].plot.bar(ax=ax, color=[COLOURS[i] for i in inputs], rot=0, width=0.78,
+                            legend=False)
     for c in ax.containers:
-        ax.bar_label(c, fmt="%.2f", fontsize=8)
-    base = table.attrs.get("everywhere", {})
-    for k, task in enumerate(f1.index):
-        if task in base:
-            ax.hlines(base[task], k - 0.42, k + 0.42, colors="k", linestyles="--", lw=1.2,
-                      label="a map that says yes everywhere" if k == 0 else None)
-    ax.set_ylabel(f"F1 (1 = perfect)\nwithin {TOLERANCE_M} m")
+        ax.bar_label(c, fmt="%.2f", fontsize=7.5)
+    if base is not None:
+        for k, b in enumerate(base):
+            if b is not None:
+                ax.hlines(b, k - 0.42, k + 0.42, colors="k", linestyles="--", lw=1.2,
+                          label="a map that says yes everywhere" if k == 0 else None)
+    ax.set_ylabel(f"{metric} (1 = perfect)\n{tol_text(metres)}")
     ax.set_xlabel("")
-    ax.set_title(title, fontsize=10)
     ax.set_ylim(0, 1.12)
-    ax.legend(frameon=False, ncol=2, loc="upper left", fontsize=8)
+    if legend:
+        ax.legend(frameon=False, ncol=3, loc="upper left", fontsize=8)
+
+
+def fig_scores(table, title, metric="F1"):
+    vals = table[metric].unstack("input")[INPUTS].loc[list(TASK_CLASS)]
+    fig, ax = plt.subplots(figsize=(7, 3.8))
+    base = [table.attrs["everywhere"][t][metric] for t in vals.index]
+    _bars(ax, vals, INPUTS, base, metric, table.attrs["metres"])
+    ax.set_title(title, fontsize=10)
     fig.tight_layout()
     return fig
 
 
-def best_input(table, task, margin=0.02):
-    f1 = table["F1"][task]
-    best = f1.idxmax()
-    if f1[best] - f1["Sentinel-2"] < margin:
+def best_input(table, task, metric="F1", margin=0.02):
+    v = table[metric][task]
+    best = v.idxmax()
+    if v[best] - v["Sentinel-2"] < margin:
         return "no real difference"
     return best
 
 
-def guess_lines(table, guesses):
+def guess_lines(table, guesses, metric="F1"):
     """Was the guess right? One line per task."""
     lines = []
     for task, guess in guesses.items():
-        result = best_input(table, task)
+        result = best_input(table, task, metric)
         if guess in (None, ""):
             mark = "you did not guess"
         else:
             mark = "as you guessed ✓" if guess == result else f"you guessed: {guess}"
-        f1 = table["F1"][task]
-        base = table.attrs.get("everywhere", {}).get(task)
-        lines.append(f"{task:<10} best: {result:<18} ({mark})   F1 " +
-                     ", ".join(f"{i} {f1[i]:.2f}" for i in INPUTS) +
-                     (f";  saying yes everywhere: {base:.2f}" if base is not None else ""))
+        v = table[metric][task]
+        base = table.attrs["everywhere"][task][metric]
+        lines.append(f"{task:<10} best: {result:<18} ({mark})   {metric} " +
+                     ", ".join(f"{i} {v[i]:.2f}" for i in INPUTS) +
+                     f";  saying yes everywhere: {base:.2f}")
     return lines
 
 
@@ -259,7 +284,8 @@ def _error_image(pred, ref, valid, metres=TOLERANCE_M):
     return img
 
 
-def fig_errors(place, size_m=500, east_m=0, north_m=0, task="buildings"):
+def fig_errors(place, size_m=500, east_m=0, north_m=0, task="buildings", metres=TOLERANCE_M,
+               metric="F1"):
     """Top: the three images. Bottom: the model's map of each against the public map.
     Green: correct. Blue: false alarm (only the model). Red: missed (only the public map)."""
     fig, axes = plt.subplots(2, 3, figsize=(15, 10.6))
@@ -270,11 +296,12 @@ def fig_errors(place, size_m=500, east_m=0, north_m=0, task="buildings"):
                           interpolation="nearest")
         axes[0, j].set_title(inp)
         pred = window(place.prediction(task, inp), size_m, east_m, north_m)
-        axes[1, j].imshow(_error_image(pred, ref, valid), interpolation="nearest")
-        axes[1, j].set_title(f"{task} from {inp}: F1 here {scores(pred, ref, valid)['F1']:.2f}")
+        axes[1, j].imshow(_error_image(pred, ref, valid, metres), interpolation="nearest")
+        here = scores(pred, ref, valid, metres)[metric]
+        axes[1, j].set_title(f"{task} from {inp}: {metric} here {here:.2f}")
     _off(axes)
     fig.legend([Patch(color=c) for c in (OK_COLOUR, FALSE_COLOUR, MISS_COLOUR)],
-               [f"right (within {TOLERANCE_M} m)", "false alarm (only the model)",
+               [f"right ({tol_text(metres)})", "false alarm (only the model)",
                 "missed (only the public map)"],
                loc="lower center", ncol=3, frameon=False)
     fig.suptitle(f"{place.name}, {task}: {size_m} m across", y=0.995)
@@ -282,97 +309,99 @@ def fig_errors(place, size_m=500, east_m=0, north_m=0, task="buildings"):
     return fig
 
 
-# ---- from a map to a decision -----------------------------------------------------------
+# ---- the model at home: OpenEarthMap -------------------------------------------------------
 
-def per_square(mask, valid, square_m=250):
-    """Share of 'yes' pixels in each square of square_m metres (NaN where data is missing)."""
-    n = int(square_m / PIXEL_M)
-    h, w = (s // n * n for s in mask.shape)
-    m = mask[:h, :w].reshape(h // n, n, w // n, n).mean((1, 3))
-    v = valid[:h, :w].reshape(h // n, n, w // n, n).mean((1, 3))
-    return np.where(v > 0.9, m, np.nan)
+OEM_INPUTS = ["aerial", *INPUTS]
+COLOURS["aerial"] = "#3a3a3a"
 
 
-def _top(values, k):
-    order = np.argsort(-np.nan_to_num(values.ravel(), nan=-1))
-    return set(order[:k].tolist())
+def get_oem(url):
+    """The land-cover model on 79 hand-labelled OpenEarthMap tiles (scores and 3 examples)."""
+    oem = json.loads(_fetch("oem_reference.json", url).read_text())
+    oem["ex"] = dict(np.load(_fetch("oem_examples.npz", url)))
+    return oem
 
 
-def decision(place, task, budget=10, square_m=250):
-    """You can visit ``budget`` squares. With each input, pick the squares where the model's
-    map shows the most buildings (or roads). A pick is a hit if the square is truly among the
-    ``budget`` densest according to the public map. Returns (figure, hits per input, text)."""
-    truth = per_square(place.refs[task], place.valid, square_m)
-    n = int(np.isfinite(truth).sum())
-    budget = min(budget, n)
-    true_top = _top(truth, budget)
-    hits, picks, corr, est = {}, {}, {}, {}
-    for inp in INPUTS:
-        est[inp] = per_square(place.prediction(task, inp), place.valid, square_m)
-        picks[inp] = _top(est[inp], budget)
-        hits[inp] = len(picks[inp] & true_top)
-        ok = np.isfinite(est[inp]) & np.isfinite(truth)
-        corr[inp] = float(np.corrcoef(est[inp][ok], truth[ok])[0, 1])
-    fig, axes = plt.subplots(1, 4, figsize=(16, 4.8))
-    vmax = np.nanmax(truth)
-    axes[0].imshow(truth, cmap="Reds", vmin=0, vmax=vmax)
-    axes[0].set_title(f"public map: share of {task}\n(black frames: the {budget} densest)")
-    for idx in true_top:
-        r, c = divmod(idx, truth.shape[1])
-        axes[0].add_patch(Rectangle((c - .5, r - .5), 1, 1, fill=False, ec="k", lw=1.5))
-    for ax, inp in zip(axes[1:], INPUTS):
-        ax.imshow(est[inp], cmap="Reds", vmin=0, vmax=max(vmax, np.nanmax(est[inp])))
-        for idx in picks[inp]:
-            r, c = divmod(idx, truth.shape[1])
-            ax.add_patch(Rectangle((c - .5, r - .5), 1, 1, fill=False, lw=2,
-                                   ec="#1a9641" if idx in true_top else "#d7191c"))
-        ax.set_title(f"{inp}: {hits[inp]} of {budget} picks are hits\n"
-                     f"(pattern agreement r = {corr[inp]:.2f})")
+def oem_table(oem, metres=TOLERANCE_M):
+    s = oem["scores"][tol_key(metres)]
+    rows = [{"task": t, "input": i, **{k: round(v, 2) for k, v in s[t][i].items()}}
+            for t in TASK_CLASS for i in OEM_INPUTS]
+    table = pd.DataFrame(rows).set_index(["task", "input"])
+    table.attrs["everywhere"] = {t: s[t]["everywhere"] for t in TASK_CLASS}
+    table.attrs["metres"] = metres
+    return table
+
+
+def fig_oem_scores(oem, metric="F1", metres=TOLERANCE_M):
+    table = oem_table(oem, metres)
+    vals = table[metric].unstack("input")[OEM_INPUTS].loc[list(TASK_CLASS)]
+    fig, ax = plt.subplots(figsize=(8.5, 3.9))
+    base = [table.attrs["everywhere"][t][metric] for t in vals.index]
+    _bars(ax, vals, OEM_INPUTS, base, metric, metres)
+    ax.set_title(f"At home: {oem['n_tiles']} hand-labelled OpenEarthMap tiles in "
+                 f"{len(oem['cities'])} cities", fontsize=10)
+    fig.tight_layout()
+    return fig
+
+
+def fig_oem_example(oem, i=0):
+    """One OpenEarthMap tile: hand-drawn labels, the four images, and the map from each."""
+    ex, colours = oem["ex"], oem["class_colours"]
+    cmap = ListedColormap(["#000000", *colours])
+    fig, axes = plt.subplots(2, 5, figsize=(17, 7.4))
+    axes[0, 0].imshow(ex[f"{i}_label"], cmap=cmap, vmin=0, vmax=8, interpolation="nearest")
+    axes[0, 0].set_title("drawn by hand (the truth)")
+    for j, inp in enumerate(OEM_INPUTS, start=1):
+        axes[0, j].imshow(ex[f"{i}_{inp}"], interpolation="nearest")
+        axes[0, j].set_title(inp + (" image (0.5 m)" if inp == "aerial" else ""))
+        axes[1, j].imshow(ex[f"{i}_map_{inp}"], cmap=cmap, vmin=0, vmax=8,
+                          interpolation="nearest")
+        axes[1, j].set_title(f"map from {inp}")
+    axes[1, 0].axis("off")
+    axes[1, 0].legend([Patch(facecolor=c, edgecolor="grey") for c in colours],
+                      oem["classes"][1:], loc="center", fontsize=10, frameon=False)
     _off(axes)
-    fig.suptitle(f"{place.name}: {square_m} m squares; green frame = hit, red = wasted visit")
-    fig.tight_layout(rect=(0, 0, 1, 0.92))
-    text = (f"{n} squares of {square_m} m; you can visit {budget}. Picking at random would "
-            f"give about {budget * budget / n:.1f} hits.\n" +
-            "\n".join(f"  {inp:<11} {hits[inp]:>2} hits of {budget}" for inp in INPUTS))
-    return fig, hits, text
+    name = str(ex["names"][i])
+    fig.suptitle(f"OpenEarthMap tile {name.rsplit('_', 1)[0].replace('_', ' ').title()}, "
+                 "500 m across", y=0.995)
+    fig.tight_layout(h_pad=2.5)
+    return fig
 
 
 # ---- all places --------------------------------------------------------------------------
 
-def all_places(summary, value="F1"):
+def all_places(summary, value="F1", metres=TOLERANCE_M):
     """One table for all places: rows = place and task, columns = inputs."""
     rows = []
     for name, s in summary.items():
+        sc = s["scores"][tol_key(metres)]
         for task in TASK_CLASS:
             rows.append({"place": name, "task": task,
-                         **{inp: s["scores"][task][inp].get(value) for inp in INPUTS}})
+                         **{inp: sc[task][inp].get(value) for inp in INPUTS}})
     return pd.DataFrame(rows).set_index(["task", "place"]).sort_index()
 
 
-def show_all_places(summary, value="F1", label=f"F1 (1 = perfect)\nwithin {TOLERANCE_M} m"):
-    table = all_places(summary, value)
+def _short(name):
+    return name.split(",")[0].replace(" office", "").replace(" headquarters", " HQ")
+
+
+def fig_all_places(summary, metric="F1", metres=TOLERANCE_M, own_model=False):
+    """Bars for every place; dashed: a map that says yes everywhere."""
+    value = f"own_model_{metric}" if own_model else metric
+    table = all_places(summary, value, metres)
     fig, axes = plt.subplots(1, 2, figsize=(15, 4.2), sharey=True)
     for ax, task in zip(axes, TASK_CLASS):
         t = table.loc[task]
-        t.index = [n.split(",")[0].replace(" office", "").replace(" headquarters", " HQ")
-                   for n in t.index]
-        t[INPUTS].plot.bar(ax=ax, color=[COLOURS[i] for i in INPUTS], rot=0, width=0.78,
-                           legend=task == "buildings")
-        for c in ax.containers:
-            ax.bar_label(c, fmt="%.2f", fontsize=7)
-        if value == "F1":
-            base = [summary[n]["scores"][task].get("everywhere_F1") for n in table.loc[task].index]
-            for k, b in enumerate(base):
-                if b is not None:
-                    ax.hlines(b, k - 0.42, k + 0.42, colors="k", linestyles="--", lw=1.2,
-                              label="saying yes everywhere" if k == 0 else None)
-        ax.set_title(task.capitalize())
-        ax.set_xlabel("")
-        ax.set_ylabel(label)
+        base = None if own_model else [
+            summary[n]["scores"][tol_key(metres)][task]["everywhere"][metric] for n in t.index]
+        t.index = [_short(n) for n in t.index]
+        _bars(ax, t, INPUTS, base, metric, metres, legend=task == "buildings")
+        ax.set_title(task.capitalize() + (" (a model trained on each input)" if own_model else ""))
         ax.tick_params(axis="x", labelsize=8)
-    for ax in axes:
-        ax.set_ylim(0, 1.12)
-    axes[0].legend(frameon=False, ncol=2, loc="upper left", fontsize=8)
     fig.tight_layout()
-    plt.show()
-    return table
+    return fig
+
+
+def show_all_places(summary, metric="F1", metres=TOLERANCE_M):
+    plt.show(fig_all_places(summary, metric, metres))
+    return all_places(summary, metric, metres)

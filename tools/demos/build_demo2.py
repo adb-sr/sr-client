@@ -42,17 +42,17 @@ OEM_TEXT = r"""
 
 * From the **aerial** image the model is very good: F1 0.88 for buildings, 0.76 for roads.
   This is what it was built for.
-* From **Sentinel-2** it is close to useless: 0.26 for buildings and 0.13 for roads, below
+* From **Sentinel-2** it is close to useless: 0.35 for buildings and 0.23 for roads, below
   the dashed line (0.40 and 0.25).
 * **Stage 1** (0.55 and 0.46) and **Stage 2** (0.66 and 0.54) are in between. Stage 2 closes
-  about two thirds of the gap between Sentinel-2 and the aerial image, for buildings and for
-  roads (a little over half pixel-exact, about three quarters within 5 m).
+  a little more than half of the gap between Sentinel-2 and the aerial image, for buildings
+  and for roads (half pixel-exact, about two thirds within 5 m).
 * **Precision and recall** show where the gain comes from. From Sentinel-2 the model marks
-  few buildings, and most of those are right (precision 0.63), but it finds only 16 % of them
+  few buildings, and most of those are right (precision 0.68), but it finds only 23 % of them
   (recall). Stage 2 keeps the precision (0.70) and finds 63 %.
 * **The confusion matrix** tells the same story. From the aerial image, 78 % of the building
-  pixels are called building. From Sentinel-2 only 12 % are: the rest become rangeland
-  (31 %), developed space (23 %), tree (17 %) and even water (13 %). From Stage 2, 48 %.
+  pixels are called building. From Sentinel-2 only 18 % are: the rest become rangeland
+  (29 %), developed space (27 %), tree (15 %) and even water (9 %). From Stage 2, 48 %.
 * The three examples are a good, a typical and a poor tile for Stage 2, not the best ones.
   Look at what Stage 2 gets right (which blocks are built up, the main roads) and what it
   does not (the exact shape of each building, narrow paths).
@@ -176,9 +176,10 @@ Labels do not get cleaner than this, so this is the best case.
 For each tile there are four images of the same place:
 
 * **aerial**: the real 0.5 m image the labels were drawn on. This is what the model knows.
-* **Sentinel-2** (enlarged), **Stage 1** and **Stage 2**: the same three versions you will see
-  for your place. The Sentinel-2 images are from 2025 and the aerial images are older, so a
-  few buildings may have changed; that counts a little against these three.
+* **Sentinel-2** (the average of the 8 dates the super-resolution model used, enlarged),
+  **Stage 1** and **Stage 2**: the same three versions you will see for your place. The
+  Sentinel-2 images are from 2025 and the aerial images are older, so a few buildings may
+  have changed; that counts a little against these three.
 
 **How the scores work** (the same in the whole notebook):
 

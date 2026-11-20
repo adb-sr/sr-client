@@ -98,7 +98,9 @@ class Task:
     def _npz(self, sid):
         return np.load(self.root / "arr" / f"{sid}.npz")
 
+    @lru_cache(maxsize=32)
     def arr(self, sid, key):
+        """One array of a scene (decompressed once and kept; do not change it in place)."""
         return self._npz(sid)[key]
 
     def keys(self, sid):
@@ -115,6 +117,16 @@ class Task:
         if not p.exists():
             return None
         return np.asarray(Image.open(p).convert("RGB"))
+
+    @lru_cache(maxsize=24)
+    def _view_u8(self, sid, key, stretch, pre):
+        im = _view(self.img(sid, key, pre=pre), stretch)
+        return None if im is None else (im * 255).round().astype(np.uint8)
+
+    def view(self, sid, key, stretch="auto", pre=False):
+        """The image as shown (contrast-stretched once per image and kept), floats 0-1."""
+        im = self._view_u8(sid, key, stretch, pre)
+        return None if im is None else im / 255.0
 
 
 def autostretch(rgb, lo=2, hi=98):
@@ -344,7 +356,7 @@ def ifs_show(task, sid, inputs=None, window=None, stretch="auto", model=None, th
     fig, axes = plt.subplots(2, len(inputs), figsize=(2.6 * len(inputs), 5.6), squeeze=False)
     for j, key in enumerate(inputs):
         ax, bx = axes[0, j], axes[1, j]
-        im = _view(task.img(sid, key), stretch)
+        im = task.view(sid, key, stretch)
         if im is None:
             _blank(ax, "image not\ndownloaded")
         else:
@@ -385,7 +397,7 @@ def ifs_gallery(task, units, idx, key="stage2", stretch="auto", ctx=128, title="
         ax.axis("off")
     for ax, i in zip(axes.flat, idx):
         u = units.iloc[i]
-        im = _view(task.img(u.scene, key), stretch)
+        im = task.view(u.scene, key, stretch)
         H, W = im.shape[:2]
         cy, cx = u.y0 + u["size"] // 2, u.x0 + u["size"] // 2
         y0 = int(np.clip(cy - ctx // 2, 0, max(H - ctx, 0)))
@@ -467,7 +479,7 @@ def xbd_show(task, sid, inputs=None, stretch="auto", title=None):
             axes[0, j].axis("off"), axes[1, j].axis("off")
         else:
             for r, pre in ((0, True), (1, False)):
-                im = _view(task.img(sid, key, pre=pre), stretch)
+                im = task.view(sid, key, stretch, pre=pre)
                 if im is None:
                     _blank(axes[r, j], "image not\ndownloaded")
                 else:
@@ -496,7 +508,7 @@ def xbd_gallery(task, units, idx, key="stage2", stretch="auto", title="", hit=No
         ax.axis("off")
     for ax, i in zip(axes.flat, idx):
         u = units.iloc[i]
-        im = _view(task.img(u.scene, key), stretch)
+        im = task.view(u.scene, key, stretch)
         if im is not None:
             ax.imshow(im)
         _overlay(ax, _outline(task.arr(u.scene, "label") == 2), "#f07814")
@@ -596,7 +608,7 @@ def ai4_show(task, sid, y0=0, x0=0, size=400, inputs=None, stretch="auto", seed=
     fig, axes = plt.subplots(2, len(inputs), figsize=(3.1 * len(inputs), 6.4), squeeze=False)
     for j, key in enumerate(inputs):
         ax, bx = axes[0, j], axes[1, j]
-        im = _view(task.img(sid, key), stretch)
+        im = task.view(sid, key, stretch)
         ax.imshow(im[sl], interpolation="nearest")
         _overlay(ax, ref_edge, "#d73027", 0.9)
         ax.set_title(SHORT.get(key, key))
@@ -640,7 +652,7 @@ def ai4_gallery(task, units, idx, key="stage1", stretch="auto", title="", hit=No
     for ax, i in zip(axes.flat, idx):
         u = units.iloc[i]
         sl = (slice(u.y0, u.y0 + u["size"]), slice(u.x0, u.x0 + u["size"]))
-        ax.imshow(_view(task.img(u.scene, key), stretch)[sl])
+        ax.imshow(task.view(u.scene, key, stretch)[sl])
         _overlay(ax, _boundaries(task.arr(u.scene, "fields_ref")[sl]), "#d73027", 0.8)
         good = bool(hit[i]) if hit is not None else None
         ax.add_patch(Rectangle((0, 0), 1, 1, transform=ax.transAxes, fill=False,

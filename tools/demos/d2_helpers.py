@@ -19,7 +19,8 @@ TASK_CLASS = {"buildings": 7, "roads": 3}
 PIXEL_M = 2.5
 TOLERANCES = [0, 2.5, 5]   # metres: a pixel counts if the other map has one this close
 TOLERANCE_M = 2.5          # the default
-METRICS = ["F1", "IoU"]
+METRICS = ["F1", "IoU", "precision", "recall"]
+OVERALL = ["F1", "IoU"]   # the metrics that judge a map as a whole
 OK_COLOUR, FALSE_COLOUR, MISS_COLOUR = (0.10, 0.70, 0.30), (0.20, 0.45, 0.95), (0.90, 0.20, 0.20)
 
 
@@ -189,12 +190,13 @@ def from_shares(found, correct):
 
 
 def scores(pred, ref, valid, metres=TOLERANCE_M):
-    """found: share of the reference's pixels with a model pixel within ``metres``;
-    correct: share of the model's pixels with a reference pixel within ``metres``;
-    F1 and IoU combine the two (0 = nothing right, 1 = perfect)."""
+    """recall: share of the reference's pixels with a model pixel within ``metres`` (what the
+    model found); precision: share of the model's pixels with a reference pixel within
+    ``metres`` (what is right of what it marks); F1 and IoU combine the two (0 = nothing
+    right, 1 = perfect)."""
     found = np.sum(ref & near(pred, metres) & valid) / max(np.sum(ref & valid), 1)
     correct = np.sum(pred & near(ref, metres) & valid) / max(np.sum(pred & valid), 1)
-    return {**from_shares(found, correct), "found": found, "correct": correct}
+    return {**from_shares(found, correct), "precision": correct, "recall": found}
 
 
 def everywhere(place, task, metres=TOLERANCE_M):
@@ -205,8 +207,7 @@ def everywhere(place, task, metres=TOLERANCE_M):
 
 
 def score_table(place, metres=TOLERANCE_M):
-    """F1 and IoU of each input for buildings and roads, plus the share of the reference that
-    was found (recall) and the share of the model's pixels that are correct (precision)."""
+    """F1, IoU, precision and recall of each input for buildings and roads."""
     rows = []
     for task in TASK_CLASS:
         for inp in INPUTS:
@@ -232,9 +233,10 @@ def _bars(ax, values, inputs, base=None, metric="F1", metres=TOLERANCE_M, legend
                           label="a map that says yes everywhere" if k == 0 else None)
     ax.set_ylabel(f"{metric} (1 = perfect)\n{tol_text(metres)}")
     ax.set_xlabel("")
-    ax.set_ylim(0, 1.12)
-    if legend:
-        ax.legend(frameon=False, ncol=3, loc="upper left", fontsize=8)
+    ax.set_ylim(0, 1.06)
+    if legend:      # below the axes: the dashed line can be anywhere up to 1 (recall)
+        ax.legend(frameon=False, ncol=5, loc="upper center", bbox_to_anchor=(0.5, -0.1),
+                  fontsize=8)
 
 
 def fig_scores(table, title, metric="F1"):
@@ -248,7 +250,7 @@ def fig_scores(table, title, metric="F1"):
 
 
 def best_input(table, task, metric="F1", margin=0.02):
-    v = table[metric][task]
+    v = table[metric if metric in OVERALL else "F1"][task]
     best = v.idxmax()
     if v[best] - v["Sentinel-2"] < margin:
         return "no real difference"
@@ -259,14 +261,15 @@ def guess_lines(table, guesses, metric="F1"):
     """Was the guess right? One line per task."""
     lines = []
     for task, guess in guesses.items():
-        result = best_input(table, task, metric)
+        judge = metric if metric in OVERALL else "F1"   # precision or recall alone cannot
+        result = best_input(table, task, judge)          # say which map is best
         if guess in (None, ""):
             mark = "you did not guess"
         else:
             mark = "as you guessed ✓" if guess == result else f"you guessed: {guess}"
-        v = table[metric][task]
-        base = table.attrs["everywhere"][task][metric]
-        lines.append(f"{task:<10} best: {result:<18} ({mark})   {metric} " +
+        v = table[judge][task]
+        base = table.attrs["everywhere"][task][judge]
+        lines.append(f"{task:<10} best: {result:<18} ({mark})   {judge} " +
                      ", ".join(f"{i} {v[i]:.2f}" for i in INPUTS) +
                      f";  saying yes everywhere: {base:.2f}")
     return lines
@@ -309,6 +312,16 @@ def fig_errors(place, size_m=500, east_m=0, north_m=0, task="buildings", metres=
     return fig
 
 
+def _matrix(ax, m, rows, cols, title, fmt="{:.0%}", vmax=None):
+    ax.imshow(m, cmap="Blues", vmin=0, vmax=vmax or max(m.max(), 1e-9))
+    for (i, j), v in np.ndenumerate(m):
+        ax.text(j, i, fmt.format(v), ha="center", va="center", fontsize=9,
+                color="white" if v > 0.55 * (vmax or m.max()) else "black")
+    ax.set_xticks(range(len(cols)), cols, fontsize=8)
+    ax.set_yticks(range(len(rows)), rows, fontsize=8)
+    ax.set_title(title, fontsize=10)
+
+
 # ---- the model at home: OpenEarthMap -------------------------------------------------------
 
 OEM_INPUTS = ["aerial", *INPUTS]
@@ -340,6 +353,23 @@ def fig_oem_scores(oem, metric="F1", metres=TOLERANCE_M):
     _bars(ax, vals, OEM_INPUTS, base, metric, metres)
     ax.set_title(f"At home: {oem['n_tiles']} hand-labelled OpenEarthMap tiles in "
                  f"{len(oem['cities'])} cities", fontsize=10)
+    fig.tight_layout()
+    return fig
+
+
+def fig_oem_confusion(oem, inp="Stage 2"):
+    """8-class confusion matrix (pixel-exact): of all pixels of each hand-drawn class, the
+    share the model gave to each class. The diagonal is right."""
+    cm = np.array(oem["confusion"][inp], dtype=float)
+    m = cm / np.maximum(cm.sum(1, keepdims=True), 1)
+    names = oem["classes"][1:]
+    fig, ax = plt.subplots(figsize=(7.6, 6.4))
+    _matrix(ax, m, [f"{n} ({s:.0%})" for n, s in zip(names, cm.sum(1) / cm.sum())],
+            names, f"At home, map from {inp}: where each hand-drawn class ends up\n"
+            f"(pixel-exact; {np.trace(cm) / cm.sum():.0%} of all pixels right)", vmax=1)
+    ax.set_xticklabels(names, rotation=40, ha="right")
+    ax.set_ylabel("drawn by hand (share of the area)")
+    ax.set_xlabel("the model says")
     fig.tight_layout()
     return fig
 

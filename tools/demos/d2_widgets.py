@@ -48,7 +48,11 @@ def _switch(key):
                                       "two pixels of shift are forgiven"])
     else:
         w = W.ToggleButtons(options=METRICS, value=SCORING["metric"], description="Score",
-                            style={"button_width": "70px", "description_width": "150px"})
+                            style={"button_width": "80px", "description_width": "150px"},
+                            tooltips=["precision and recall combined",
+                                      "intersection over union: lower than F1, same order",
+                                      "of what the model marks, the share that is right",
+                                      "of what the public map has, the share the model found"])
     w.observe(lambda change: _on_switch(change, key), names="value")
     _SWITCHES[key].append(w)
     return w
@@ -113,6 +117,13 @@ def model_at_home(url):
                            value=0, description="Look at", style={"button_width": "190px",
                                                                   "description_width": "150px"})
     example = W.Image(format="png")
+    which = W.ToggleButtons(options=OEM_INPUTS, value="Stage 2", description="Map from",
+                            style={"button_width": "100px", "description_width": "150px"})
+    matrix = W.Image(format="png", layout=W.Layout(width="560px"))
+
+    def draw_matrix(_=None):
+        matrix.value = _png(fig_oem_confusion(oem, which.value))
+    which.observe(draw_matrix, names="value")
 
     def draw_scores(_=None):
         m, metric = SCORING["metres"], SCORING["metric"]
@@ -127,8 +138,11 @@ def model_at_home(url):
     SCORE_REFRESH.append(draw_scores)
     draw_scores()
     draw_example()
-    ui = W.VBox([_switches(), chart, table, W.HTML("<br>"), tile, example])
-    ui.tile = tile
+    draw_matrix()
+    ui = W.VBox([_switches(), chart, table, W.HTML("<br>"), tile, example,
+                 W.HTML("<br><b>Which classes does the model confuse?</b> (pixel-exact)"),
+                 which, matrix])
+    ui.tile, ui.which, ui.matrix = tile, which, matrix
     UI["home"] = ui
     display(ui)
 
@@ -266,7 +280,7 @@ def card_text():
             for t in TASK_CLASS:
                 v = table[metric][t]
                 base = table.attrs["everywhere"][t][metric]
-                lines.append(f"{metric:<4} {t:<10} " + ", ".join(f"{i} {v[i]:.2f}" for i in INPUTS)
+                lines.append(f"{metric:<9} {t:<10} " + ", ".join(f"{i} {v[i]:.2f}" for i in INPUTS)
                              + f"  (everywhere {base:.2f})")
     lines += ["-" * 68,
               f"my guess, buildings:     {get('GUESS_BUILDINGS')}",

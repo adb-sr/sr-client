@@ -47,6 +47,12 @@ OEM_TEXT = r"""
 * **Stage 1** (0.55 and 0.46) and **Stage 2** (0.66 and 0.54) are in between. Stage 2 closes
   about two thirds of the gap between Sentinel-2 and the aerial image, for buildings and for
   roads (a little over half pixel-exact, about three quarters within 5 m).
+* **Precision and recall** show where the gain comes from. From Sentinel-2 the model marks
+  few buildings, and most of those are right (precision 0.63), but it finds only 16 % of them
+  (recall). Stage 2 keeps the precision (0.70) and finds 63 %.
+* **The confusion matrix** tells the same story. From the aerial image, 78 % of the building
+  pixels are called building. From Sentinel-2 only 12 % are: the rest become rangeland
+  (31 %), developed space (23 %), tree (17 %) and even water (13 %). From Stage 2, 48 %.
 * The three examples are a good, a typical and a poor tile for Stage 2, not the best ones.
   Look at what Stage 2 gets right (which blocks are built up, the main roads) and what it
   does not (the exact shape of each building, narrow paths).
@@ -60,8 +66,10 @@ RESULTS_TEXT = r"""
 
 * **Buildings**: the score rises with every step, in every place: F1 0.21 to 0.32 on
   Sentinel-2, 0.48 to 0.56 on Stage 1, 0.65 to 0.75 on Stage 2 (pixel-exact 0.53 to 0.60;
-  within 5 m 0.74 to 0.84). Stage 2 finds 64 to 78 % of the buildings, and 67 to 79 % of what
-  it marks is right. But in the four cities a map that says "building" everywhere already
+  within 5 m 0.74 to 0.84). Stage 2 finds 64 to 78 % of the buildings (recall), and 67 to 79 %
+  of what it marks is right (precision). Almost all the gain is recall: on Sentinel-2 the
+  model already marks few buildings, and those are mostly right (precision 0.61 to 0.82), but
+  it finds only 12 to 20 % of them. But in the four cities a map that says "building" everywhere already
   scores 0.54 to 0.72: Stage 2 is above that line by only 0.02 to 0.11. Where almost
   everything is built up, the map adds little to "it is all built up". In Nueva Ecija, with
   few buildings, the line is at 0.16 and Stage 2 (0.74) is far above it.
@@ -70,8 +78,8 @@ RESULTS_TEXT = r"""
   0.25. Stage 2 reaches 0.29 to 0.61 and is clearly above the "roads everywhere" line (0.30
   to 0.36 in the cities, 0.09 in Nueva Ecija) in every place except Cebu (0.29 against 0.30),
   where the streets between small houses are too narrow. Stage 2 finds 25 to 54 % of the
-  roads, and 36 to 71 % of what it marks is right: it misses roads more often than it invents
-  them. The largest gain is for the farm roads of Nueva Ecija (0.01 to 0.61).
+  roads (recall), and 36 to 71 % of what it marks is right (precision): it misses roads more
+  often than it invents them. The largest gain is for the farm roads of Nueva Ecija (0.01 to 0.61).
 * **The tolerance changes the level, not the order.** Forgive more shift and every score
   rises, the dashed line too. The order of the three images never changes, and the lead of
   Stage 2 over the line moves by a few hundredths (Cebu roads go from just above the line,
@@ -174,8 +182,10 @@ For each tile there are four images of the same place:
 
 **How the scores work** (the same in the whole notebook):
 
-* **found**: the share of the true buildings (or roads) that the model found;
-  **correct**: the share of the model's buildings that are right.
+* **Recall**: the share of the true buildings (or roads) that the model found.
+  **Precision**: of what the model marks as building, the share that is right. Each alone
+  can be gamed: a map that says "building" everywhere has a perfect recall, and a map that
+  marks one sure building has a perfect precision.
 * **F1** combines the two: 0 = nothing right, 1 = perfect. **IoU** (intersection over
   union) is the share both maps agree on, out of everything either map calls a building. It
   is always lower than F1 (IoU = F1 / (2 − F1)) and ranks the images in the same order; it is
@@ -186,8 +196,13 @@ For each tile there are four images of the same place:
 * **The dashed line** is the score of a useless map that says "building" (or "road")
   everywhere. A map is only worth something where it is clearly above that line.
 
+* **The confusion matrix** (under the examples) shows, for each class drawn by hand, which
+  class the model gave those pixels. The diagonal is right; everything else is a confusion.
+  It counts pixel-exact: a pixel has to land in one box, so the tolerance does not apply.
+
 Run the cell and try the switches: they change every score in this notebook. Then click
-through the three example tiles.
+through the three example tiles, and compare the confusion matrix of the aerial image with
+that of Sentinel-2: where do the buildings go?
 """)
 code("model_at_home(DATA_URL)")
 md(OEM_TEXT)
@@ -259,7 +274,9 @@ md(r"""
 Compare the three images with each other and with the dashed line, not with 1, and not with
 step 1: the public maps were not drawn on these images, so even a perfect model would not
 reach 1. A missing road in OpenStreetMap counts against the model. Try the three tolerances:
-which conclusions change, and which stay?
+which conclusions change, and which stay? Then look at precision and recall: does
+super-resolution help the model *find* more, or make *fewer false alarms*? (For recall the
+dashed line is at 1: saying yes everywhere finds everything.)
 """)
 
 md(r"""

@@ -2,8 +2,10 @@
 
     python tools/hackathon/build.py          # writes notebooks/hackathon/*.ipynb
 
-The helper code (hk.py) is pasted into a hidden form cell of each notebook, so each
-notebook runs on its own in Colab with nothing but the data download.
+The helper code (hk.py, then the ipywidgets controls in hk_widgets.py) is pasted into a
+hidden form cell of each notebook, so each notebook runs on its own in Colab with nothing but
+the data download. The controls act at once (Colab ships ipywidgets 7.7.1); test them by
+setting widget values in code (see UI in hk_widgets.py).
 """
 from pathlib import Path
 
@@ -15,7 +17,7 @@ REPO = "adb-sr/sr-client"
 BRANCH = "main"
 DATA_URL = "https://huggingface.co/datasets/adbsr-internal/ssta-hackathon/resolve/main"
 
-HELPERS = (HERE / "hk.py").read_text()
+HELPERS = (HERE / "hk.py").read_text() + "\n\n" + (HERE / "hk_widgets.py").read_text()
 
 
 def md(s):
@@ -71,8 +73,11 @@ AI assistant you like to change the code.
 
 {minutes_note}
 """),
-            md("## 0. Setup\n\nRun the next two cells (Shift+Enter). The first one holds the helper "
-               "code; you do not need to read it."),
+            md("## 0. Setup\n\nRun the cells one by one (Shift+Enter), each once. The first one "
+               "holds the helper code; you do not need to read it. Most cells show **controls** "
+               "(menus, sliders, buttons, text fields): they act at once, so you do not need to "
+               "run the cell again after changing them. Your answers are saved as you type. If a "
+               "control seems to do nothing, run its cell again."),
             code("# @title Helper functions (run this cell; you do not need to read it) { display-mode: \"form\" }\n"
                  + HELPERS, hidden=True)]
 
@@ -103,8 +108,8 @@ model is applied to each:
 """
 
 
-def scenario_cells(example):
-    return [md(f"""
+def scenario_cells():
+    return [md("""
 ## 4. Your scenario
 
 Before you look at any decision numbers, agree as a team on **a real decision** this map would
@@ -116,26 +121,31 @@ feed. Be concrete; the numbers in part 5 only mean something for a concrete deci
 * **What does a wasted visit cost**, and **what does a missed place cost**? Money, days, people,
   or harm. Rough is fine; the ratio matters most.
 
-If you have no idea of your own, use the example below and change what does not fit your agency.
+Type your answers into the fields: they are saved as you type and end up on your slide card in
+part 9. The grey text is an example; if you have no idea of your own, the button copies the
+example into the empty fields, and you change what does not fit your agency.
 """),
-            code(example)]
+            code("scenario(task)")]
 
 
-def overlap_md():
-    return md("""
+def overlap_cells():
+    return [md("""
 ## 6. Did super-resolution change *which* places you picked?
 
 A better score does not always mean a different decision. The table shows how many of the
 places picked with one input are also picked with another (100 % = the same list). Then look at
-the places themselves: green frames are hits, red frames are wasted visits.
-""")
+the places themselves: green frames are hits, red frames are wasted visits. Choose the input
+whose picks you want to see; below them are its most confident false alarms and the clear hits
+it would not visit. Everything here follows the settings of part 5.
+"""),
+            code("picks_view()")]
 
 
 SLIDE_MD = """
 ## 9. Numbers for your slide
 
-Fill in the scenario in part 4 first. This cell prints everything your slide needs and saves the
-chart as `my_slide_chart.png`.
+Choose your verdict below. The card collects your scenario (part 4), the decision settings
+(part 5) and your answers; it follows any change by itself. The button downloads the chart.
 
 **Your slide** (one slide, template from the facilitators) has four parts:
 1. **Scenario**: who decides, budget, what a hit is, what errors cost.
@@ -150,15 +160,16 @@ Questions to discuss before you write the verdict:
 """
 
 
-def api_cells(places_code, note):
+def api_cells(places_code, note, lat, lon):
     return [md(f"""
 ## 8. Optional: super-resolve an area of your own
 
 With the SR service you can make stage 1 and stage 2 images for any area up to 5 km × 5 km.
 Your API key (`srk_...`) and the service address are on your team card; in Colab, store them
 under **Secrets** (key icon on the left) as `SR_API_KEY` and `SR_API_URL`, or paste them when
-asked. The areas below were run before the workshop, so they come back in seconds and cost
-nothing. Each new area takes 3–6 minutes.
+asked. The ready-made areas were run before the workshop, so they come back in seconds and cost
+nothing. A new area takes 3–6 minutes, and the button waits until it is done. You can add your
+own areas to `READY_MADE`, or choose "My own place" in the menu.
 
 {note}
 """),
@@ -183,34 +194,7 @@ sr = SRClient(secret("SR_API_KEY", "API key (srk_...): "), url=secret("SR_API_UR
 sr.me()["budget"]
 """),
             code(places_code),
-            code("""
-def run_place(name, stages=("1", "2")):
-    p = READY_MADE[name]
-    job = sr.submit(p["area"], p["date"], stages=list(stages), **p.get("options", {}))
-    job.wait()
-    for w in job.warnings:
-        print(f"[{w['code']}] {w['message']}")
-    return job
-
-
-def show_job(job, size=400, y0=None, x0=None):
-    lr, s1, s2 = (job.open(f) for f in ("lr_reference.tif", "stage1_sr.tif", "stage2_sr.tif"))
-    h, w = s2.sizes["y"], s2.sizes["x"]
-    y0 = (h - size) // 2 if y0 is None else y0
-    x0 = (w - size) // 2 if x0 is None else x0
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5.4))
-    for ax, da, t in zip(axes, (lr, s1, s2), ("Sentinel-2 (10 m)", "SR stage 1", "SR stage 2")):
-        a = da.isel(band=[0, 1, 2], y=slice(y0, y0 + size), x=slice(x0, x0 + size)).values
-        a = np.moveaxis(np.nan_to_num(a.astype("float32")), 0, -1)
-        ax.imshow(autostretch((a / max(a.max(), 1e-6) * 255)))
-        ax.set_title(t), ax.set_xticks([]), ax.set_yticks([])
-    plt.tight_layout()
-    plt.show()
-
-
-job = run_place(list(READY_MADE)[0])
-show_job(job)
-""")]
+            code(f"sr_panel(sr, READY_MADE, default_lat={lat}, default_lon={lon})")]
 
 
 FOOTER = """
@@ -267,26 +251,15 @@ notebook asks whether these differences change **where you would send people**.
 
 ## 3. Look around, including failures
 
-Pick a tile in the list (sorted from most to least informal settlement) and run the cell. Top row: what the model sees. Bottom row: orange = flagged as informal (pixels
-where the six models' mean probability is above 0.5), black line = expert outline. Look for:
+Choose a tile in the menu (sorted from most to least informal settlement); the picture follows
+at once. Top row: what the model sees. Bottom row: orange = flagged as informal (pixels where the
+six models' mean probability is above the threshold, 0.5 unless you move the slider), black
+line = expert outline. You can also look at one model at a time. Look for:
 * places flagged on super-resolved images but not on real images: **invented** settlements?
 * settlements missed everywhere: what do they look like?
 """),
-              code("""
-TILE = "manila_south_r008_c006"  # @param ["manila_south_r008_c006", "manila_south_r011_c003", "quezon_city_100km2_r008_c005", "manila_south_r006_c014", "manila_south_r011_c001", "manila_south_r008_c001", "quezon_city_100km2_r006_c001", "quezon_city_100km2_r006_c004", "quezon_city_100km2_r002_c004", "quezon_city_100km2_r005_c001", "manila_south_r007_c002", "quezon_city_100km2_r007_c004", "manila_south_r005_c008", "quezon_city_100km2_r008_c000", "manila_south_r014_c000", "quezon_city_100km2_r008_c003", "manila_south_r006_c007", "manila_south_r006_c001", "quezon_city_100km2_r001_c007", "quezon_city_100km2_r007_c005", "quezon_city_100km2_r004_c000", "manila_south_r004_c002", "manila_south_r004_c004", "manila_south_r005_c004", "manila_south_r005_c005", "manila_south_r007_c009", "manila_south_r008_c012", "manila_south_r010_c009", "manila_south_r010_c011", "manila_south_r011_c004", "manila_south_r011_c009", "manila_south_r011_c011", "manila_south_r011_c012", "manila_south_r013_c011", "manila_south_r013_c012", "quezon_city_100km2_r000_c003", "quezon_city_100km2_r004_c002", "quezon_city_100km2_r004_c003", "quezon_city_100km2_r006_c005", "quezon_city_100km2_r007_c003"]
-ifs_show(task, TILE)
-"""),
-              *scenario_cells('''
-SCENARIO = dict(
-    team="Team A",
-    decision_maker="DHSUD regional office, informal settlement upgrading programme",
-    decision="Which city blocks get a field survey this quarter",
-    budget="20 survey visits, one 100 m x 100 m block each",
-    hit="a block where at least a quarter of the area is informal settlement",
-    cost_of_wasted_visit="1 survey day for a team of 2",
-    cost_of_missed_place="a settlement left out of the programme for a year: about 3 survey days' worth",
-)
-'''),
+              code("explore(task)"),
+              *scenario_cells(),
               md("""
 ## 5. The decision cell
 
@@ -294,66 +267,43 @@ The map is cut into square blocks. For every block and every input, the models' 
 score: the share of the block flagged as informal. You visit the **highest-scoring blocks**, up
 to your budget. Afterwards, the expert outlines tell us which visits were hits.
 
-Change the settings to match your scenario, then run the cell. In Colab you can use the sliders.
+Set the controls to match your scenario: the chart and the table follow at once, and so do
+parts 6 and 9.
 """),
-              code("""
-BUDGET = 20  # @param {type:"slider", min:5, max:100, step:5}
-BLOCK_M = 100  # @param [50, 100, 200] {type:"raw"}
-HIT_SHARE = 0.25  # @param {type:"slider", min:0.05, max:0.9, step:0.05}
-COST_WASTED_VISIT = 1  # @param {type:"number"}
-COST_MISSED_PLACE = 3  # @param {type:"number"}
-
-units, preds = ifs_units(task, cell_m=BLOCK_M)
-hit = units.truth.values >= HIT_SHARE
-res = decide(units, preds, hit, BUDGET, COST_WASTED_VISIT, COST_MISSED_PLACE, labels=labels)
-plot_decision(res, BUDGET, f"Survey {BUDGET} blocks of {BLOCK_M} m: how many are hits?")
-plt.show()
-res
-"""),
+              code("decision_panel(task)"),
               md("""
 **How to read it.** *Hits* is the mean over the six task models; *range* shows the worst and
 best model, a reminder that a single model can be lucky or unlucky. *Random* is what you would
 expect without any map; *perfect* is the best your budget allows. *Cost* = wasted visits ×
 their cost + missed places × their cost, in your units.
 
-Does the advantage hold for a smaller or bigger budget?
+Does the advantage hold for a smaller or bigger budget? (This chart follows part 5 too.)
 """),
-              code("sweep(preds, hit, labels=labels, title='Share of visits that are hits')"),
-              overlap_md(),
-              code("""
-overlap_table(preds, BUDGET, labels=labels)
-"""),
-              code("""
-for key in ["s2", "stage2"]:
-    picks = top_k(preds[key].mean(0), BUDGET)
-    ifs_gallery(task, units, picks, key="stage2", hit=hit,
-                title=f"The {BUDGET} blocks you would visit using {SHORT[key]} (shown on the stage 2 image)")
-
-# Failure cases: stage 2's most confident false alarms, and the clearest settlements it ranks low
-score = preds["stage2"].mean(0)
-order = np.argsort(-score)
-false_alarms = [i for i in order if not hit[i]][:8]
-missed = [i for i in np.argsort(-units.truth.values) if i not in set(order[:BUDGET])][:8]
-ifs_gallery(task, units, false_alarms, key="stage2", hit=hit, title="Stage 2: highest-scoring blocks that are NOT hits")
-ifs_gallery(task, units, missed, key="stage2", hit=hit, title="Clearest settlements that stage 2 would NOT visit")
-"""),
-              code("""
-# Look at one of them in detail (change the number to pick another)
-i = false_alarms[0]
-u = units.iloc[i]
-ifs_show(task, u.scene, box=(u.y0, u.x0, u["size"]))
-"""),
+              code("sweep_view()"),
+              *overlap_cells(),
               md("""
 ## 7. Optional: improve the baseline
 
 Only if you have time, and only if it helps your decision. Ideas:
-* **Threshold**: `ifs_units(task, cell_m=BLOCK_M, thr=0.3)` flags more pixels. Does a lower
-  threshold help the Sentinel-2 or stage 1 inputs?
+* **Threshold**: `ifs_units(task, cell_m=100, thr=0.3)` flags more pixels. Does a lower
+  threshold help the Sentinel-2 or stage 1 inputs? (worked example in the next cell)
 * **Score**: rank blocks by the mean probability instead of the share above the threshold
   (the arrays are in `task.arr(tile, "prob_stage2")`, values 0–255, one slice per model).
 * **One model or six?** Use `preds[key][m]` for model `m` and see how much the decision depends
   on the model you happen to have.
 * **Combine inputs**: e.g. visit a block only if both stage 1 and stage 2 flag it.
+
+`current()` gives the decision of part 5 as it is set now; `decide`, `plot_decision` and
+`sweep` work on anything of the same shape.
+"""),
+              code("""
+units, preds, hit, res = current()   # the decision of part 5, as it is set now
+
+# Worked example: a lower threshold (0.3) with the same block size, hit rule and budget
+block_m = int(units["size"].iloc[0] * task.px)
+units_low, preds_low = ifs_units(task, cell_m=block_m, thr=0.3)
+hit_low = units_low.truth.values >= S["hit_at"]
+decide(units_low, preds_low, hit_low, S["budget"], S["cost_wasted"], S["cost_missed"], labels=labels)
 """),
               *api_cells('''
 READY_MADE = {
@@ -363,9 +313,9 @@ READY_MADE = {
     "Manila South test area": dict(area=area_around(14.5560, 121.0136, km=2), date="2025-06-01"),
 }
 ''', "There is no informal-settlement model in this part (its weights are not public). Use it to "
-     "look: would *you* spot the settlements you know on stage 1 or stage 2?"),
+     "look: would *you* spot the settlements you know on stage 1 or stage 2?", 14.5960, 120.9620),
               md(SLIDE_MD),
-              code("slide_numbers(res, SCENARIO, BUDGET, task.meta['title'])"),
+              code("slide_card()"),
               md(FOOTER + "\nInformal-settlement outlines: ADB technical assistance, expert annotators. "
                  "Real high-resolution images: Google satellite imagery, workshop use only.")]
     return name, cells
@@ -419,29 +369,13 @@ matters for **where you send teams**.
 
 ## 3. Look around, including failures
 
-Pick an event and an area (1 = the most damaged area of that event) and run the cell. Rows: before, after, model output (blue intact, orange damaged). Look
-for:
+Choose an event and move the slider (1 = the most damaged area of that event); the picture
+follows at once. Rows: before, after, model output (blue intact, orange damaged). Look for:
 * damage the model sees on real images but not on super-resolved ones, and the reverse;
 * areas where the after image is cloudy, hazy or taken long after the event.
 """),
-              code("""
-EVENT_VIEW = "hurricane-matthew"  # @param ["hurricane-matthew", "nepal-flooding", "santa-rosa-wildfire", "sunda-tsunami", "guatemala-volcano"]
-RANK = 1  # @param {type:"slider", min:1, max:100, step:1}
-# RANK 1 = the area of this event with the most damaged buildings, 2 = the next, ...
-areas = task.scenes[task.scenes.event == EVENT_VIEW].sort_values("n_damaged_px", ascending=False)
-xbd_show(task, areas.index[min(RANK, len(areas)) - 1])
-"""),
-              *scenario_cells('''
-SCENARIO = dict(
-    team="Team B",
-    decision_maker="Provincial disaster office (PDRRMO), first 72 hours after a typhoon",
-    decision="Which areas get a rapid damage assessment team first",
-    budget="20 team deployments, one 0.25 km2 area each",
-    hit="an area with at least 5,000 m2 of damaged buildings (about 50 houses)",
-    cost_of_wasted_visit="1 team-day that could have gone to a badly hit area",
-    cost_of_missed_place="relief to ~50 households delayed by days: about 5 team-days' worth",
-)
-'''),
+              code("explore(task)"),
+              *scenario_cells(),
               md("""
 ## 5. The decision cell
 
@@ -450,55 +384,23 @@ For every area and every input, the model's map gives a score: the square metres
 teams to the **highest-scoring areas**, up to your budget. Afterwards, the expert labels tell us
 which deployments were hits.
 
-Pick the event that is closest to your hazards. The Guatemala and Sunda events are too small to
-rank. Then change the settings to match your scenario and run the cell.
+Pick the event that is closest to your hazards (the Guatemala and Sunda events are too small to
+rank on their own). Set the other controls to match your scenario: the chart and the table
+follow at once, and so do parts 6 and 9.
 """),
-              code("""
-EVENT = "hurricane-matthew"  # @param ["hurricane-matthew", "nepal-flooding", "santa-rosa-wildfire", "all"]
-TARGET = "damaged"  # @param ["damaged", "buildings"]
-BUDGET = 20  # @param {type:"slider", min:5, max:100, step:5}
-HIT_M2 = 5000  # @param {type:"number"}
-COST_WASTED_VISIT = 1  # @param {type:"number"}
-COST_MISSED_PLACE = 5  # @param {type:"number"}
-
-units, preds = xbd_units(task, EVENT, target=TARGET)
-hit = units.truth.values >= HIT_M2
-res = decide(units, preds, hit, BUDGET, COST_WASTED_VISIT, COST_MISSED_PLACE, labels=labels)
-plot_decision(res, BUDGET, f"{EVENT}: send {BUDGET} teams, how many reach a hit?")
-plt.show()
-res
-"""),
+              code("decision_panel(task)"),
               md("""
 **How to read it.** *Hits* = deployments to an area that meets your hit rule. *Random* is what
 you would expect without any map; *perfect* is the best your budget allows. *Cost* = wasted
 deployments × their cost + missed areas × their cost, in your units. There is one task model
 here, so there is no range.
 
-Try `TARGET = "buildings"`: knowing **where buildings are** is a different decision (e.g. where
-to pre-position relief) and may give a different answer. Does the advantage hold for other
-budgets?
+Try ranking by **any buildings**: knowing **where buildings are** is a different decision (e.g.
+where to pre-position relief) and may give a different answer. Does the advantage hold for other
+budgets? (This chart follows part 5 too.)
 """),
-              code("sweep(preds, hit, labels=labels, title='Share of deployments that are hits')"),
-              overlap_md(),
-              code("overlap_table(preds, BUDGET, labels=labels)"),
-              code("""
-for key in ["s2", "stage2"]:
-    picks = top_k(preds[key][0], BUDGET)
-    xbd_gallery(task, units, picks, key="hr" if task.has_image["hr"] else "stage2", hit=hit,
-                title=f"The {BUDGET} areas you would visit using {SHORT[key]} (after image; orange = damaged buildings)")
-
-# Failure cases for stage 2: confident false alarms and badly hit areas it ranks low
-score = preds["stage2"][0]
-order = np.argsort(-score)
-false_alarms = [i for i in order if not hit[i]][:8]
-missed = [i for i in np.argsort(-units.truth.values) if i not in set(order[:BUDGET])][:8]
-xbd_gallery(task, units, false_alarms, key="stage2", hit=hit, title="Stage 2: highest-scoring areas that are NOT hits")
-xbd_gallery(task, units, missed, key="stage2", hit=hit, title="Worst-hit areas that stage 2 would NOT visit")
-"""),
-              code("""
-# Look at one of them in detail (change the number to pick another)
-xbd_show(task, units.iloc[missed[0]].scene)
-"""),
+              code("sweep_view()"),
+              *overlap_cells(),
               md("""
 ## 7. Optional: improve the baseline
 
@@ -511,6 +413,13 @@ Only if you have time, and only if it helps your decision. Ideas:
 * **Change, not state**: the model looks at before and after together and cannot use the change
   between them. A simple before/after difference of Sentinel-2 brightness inside predicted
   buildings is a cheap damage signal: try it.
+
+`current()` gives the decision of part 5 as it is set now; `decide`, `plot_decision` and
+`sweep` work on anything of the same shape.
+"""),
+              code("""
+units, preds, hit, res = current()   # the decision of part 5, as it is set now
+units.head()
 """),
               *api_cells('''
 EVENT_DAY = "2021-12-16"   # Typhoon Odette (Rai) made landfall on Siargao
@@ -522,11 +431,11 @@ READY_MADE = {
         area=area_around(9.7840, 126.1560, km=3), date="2021-12-17",
         options=dict(time_window={"days_before": 0, "days_after": 60})),
 }
-''', "December is cloudy in Siargao, so these may have few clear Sentinel-2 images: check "
-     "`sr.estimate(...)` and the `low_diversity` warning. Compare before and after: would you "
-     "trust what you see for a damage decision?"),
+''', "December is cloudy in Siargao, so these may have few clear Sentinel-2 images: watch for "
+     "the `low_diversity` warning. Compare before and after: would you trust what you see for a "
+     "damage decision?", 9.7840, 126.1560),
               md(SLIDE_MD),
-              code("slide_numbers(res, SCENARIO, BUDGET, task.meta['title'])"),
+              code("slide_card()"),
               md(FOOTER + "\nxBD (Gupta et al. 2019; Maxar Open Data / xView2): CC BY-NC-SA 4.0, "
                  "non-commercial use.")]
     return name, cells
@@ -586,88 +495,52 @@ of fields each model draws per area, against the reference.
               md("""
 ## 3. Look around, including failures
 
-Pick an area and a 1 km window and run the cell. Look for fields that are split in two, or merged with their
-neighbours, and for the hazy area `46_vietnam`, where plain Sentinel-2 nearly fails.
+Choose an area, a window size and move the sliders; the picture follows at once. Look for fields
+that are split in two, or merged with their neighbours, and for the hazy area `46_vietnam`, where
+plain Sentinel-2 nearly fails. The three trained models (seeds) of each input can differ: compare
+them.
 """),
-              code("""
-AREA = "16_cambodia"  # @param ["12_cambodia", "16_cambodia", "21_cambodia", "26_vietnam", "27_vietnam", "30_vietnam", "46_vietnam", "56_vietnam", "58_cambodia", "8_cambodia"]
-Y0 = 800  # @param {type:"slider", min:0, max:1700, step:100}
-X0 = 800  # @param {type:"slider", min:0, max:1700, step:100}
-# a 1 km window (400 x 400 pixels of 2.5 m) starting Y0 pixels from the top and X0 from the left
-ai4_show(task, AREA, y0=Y0, x0=X0, size=400)
-"""),
-              *scenario_cells('''
-SCENARIO = dict(
-    team="Team C",
-    decision_maker="Department of Agriculture regional office, smallholder support programme",
-    decision="Which 500 m x 500 m squares get an extension-worker visit to enrol small farms",
-    budget="30 visits",
-    hit="a square with at least 30 fields smaller than 0.25 ha",
-    cost_of_wasted_visit="1 extension-worker day",
-    cost_of_missed_place="~30 smallholders not enrolled this season: about 2 worker-days' worth",
-)
-'''),
+              code("explore(task)"),
+              *scenario_cells(),
               md("""
 ## 5. The decision cell
 
 The areas are cut into squares. For every square and every input, the model's fields give a
 score: the **number of small fields** in the square (counted by the field's centre). You visit
 the **highest-scoring squares**, up to your budget. Afterwards, the expert outlines tell us which
-visits were hits. The first run takes about 15 seconds.
-"""),
-              code("""
-BUDGET = 30  # @param {type:"slider", min:5, max:100, step:5}
-SQUARE_M = 500  # @param [250, 500, 1000] {type:"raw"}
-SMALL_FIELD_M2 = 2500  # @param {type:"number"}
-HIT_FIELDS = 30  # @param {type:"number"}
-COST_WASTED_VISIT = 1  # @param {type:"number"}
-COST_MISSED_PLACE = 2  # @param {type:"number"}
+visits were hits.
 
-units, preds = ai4_units(task, cell_m=SQUARE_M, small_m2=SMALL_FIELD_M2 or None)
-hit = units.truth.values >= HIT_FIELDS
-res = decide(units, preds, hit, BUDGET, COST_WASTED_VISIT, COST_MISSED_PLACE, labels=labels)
-plot_decision(res, BUDGET, f"Visit {BUDGET} squares of {SQUARE_M} m: how many are hits?")
-plt.show()
-res
+Set the controls to match your scenario: the chart and the table follow at once, and so do
+parts 6 and 9. A new square size or field size takes about 15 seconds the first time.
 """),
+              code("decision_panel(task)"),
               md("""
 **How to read it.** *Hits* is the mean over the three trained models; *range* shows the worst
 and best. *Random* is what you would expect without any map; *perfect* is the best your budget
-allows. Set `SMALL_FIELD_M2 = 0` to count all fields instead of small ones.
+allows. Choose **all fields** to count every field instead of the small ones.
 
-Does the advantage hold for a smaller or bigger budget?
+Does the advantage hold for a smaller or bigger budget? (This chart follows part 5 too.)
 """),
-              code("sweep(preds, hit, labels=labels, title='Share of visits that are hits')"),
-              overlap_md(),
-              code("overlap_table(preds, BUDGET, labels=labels)"),
-              code("""
-for key in ["s2", "stage1"]:
-    picks = top_k(preds[key].mean(0), BUDGET)
-    ai4_gallery(task, units, picks, key="stage1", hit=hit,
-                title=f"The {BUDGET} squares you would visit using {SHORT[key]} (stage 1 image, red = reference fields)")
-
-score = preds["stage2"].mean(0)
-order = np.argsort(-score)
-false_alarms = [i for i in order if not hit[i]][:8]
-ai4_gallery(task, units, false_alarms, key="stage2", hit=hit,
-            title="Stage 2: highest-scoring squares that are NOT hits (invented boundaries?)")
-"""),
-              code("""
-# Look at one of them in detail (change the number to pick another)
-u = units.iloc[false_alarms[0]]
-ai4_show(task, u.scene, y0=int(u.y0), x0=int(u.x0), size=int(u["size"]))
-"""),
+              code("sweep_view()"),
+              *overlap_cells(),
               md("""
 ## 7. Optional: improve the baseline
 
 Only if you have time, and only if it helps your decision. Ideas:
-* **Ignore tiny fields**: `ai4_units(..., min_px=64)` drops drawn fields under 400 m², which
-  are often fragments of one field.
+* **Ignore tiny fields**: `ai4_units(task, cell_m=500, small_m2=2500, min_px=64)` drops drawn
+  fields under 400 m², which are often fragments of one field.
 * **Seeds**: `preds[key][s]` is the model trained with seed `s`. How much does your decision
   depend on which training run you happen to have?
 * **Area, not count**: score squares by the share of their area in small fields.
 * The boundary-probability maps are in `task.arr(area, "prob_stage1_s0")` if you want to draw
   your own fields.
+
+`current()` gives the decision of part 5 as it is set now; `decide`, `plot_decision` and
+`sweep` work on anything of the same shape.
+"""),
+              code("""
+units, preds, hit, res = current()   # the decision of part 5, as it is set now
+units.head()
 """),
               *api_cells('''
 READY_MADE = {
@@ -675,9 +548,9 @@ READY_MADE = {
     "Nueva Ecija (as in practical demonstration 2)": dict(area=area_around(15.5784, 120.9726, km=2), date="2026-03-15"),
 }
 ''', "There is no field model in this part. Use it to look: are the boundaries you know visible on "
-     "stage 1? Does stage 2 draw boundaries that are not there?"),
+     "stage 1? Does stage 2 draw boundaries that are not there?", 15.7150, 120.9050),
               md(SLIDE_MD),
-              code("slide_numbers(res, SCENARIO, BUDGET, task.meta['title'])"),
+              code("slide_card()"),
               md(FOOTER + "\nAI4SmallFarms (Persello et al. 2023): CC BY 4.0.")]
     return name, cells
 

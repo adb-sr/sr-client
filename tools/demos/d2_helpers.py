@@ -21,6 +21,7 @@ TOLERANCES = [0, 2.5, 5]   # metres: a pixel counts if the other map has one thi
 TOLERANCE_M = 2.5          # the default
 METRICS = ["F1", "IoU", "precision", "recall"]
 OVERALL = ["F1", "IoU"]   # the metrics that judge a map as a whole
+NO_COLOUR = "#d7191c"
 OK_COLOUR, FALSE_COLOUR, MISS_COLOUR = (0.10, 0.70, 0.30), (0.20, 0.45, 0.95), (0.90, 0.20, 0.20)
 
 
@@ -220,8 +221,17 @@ def score_table(place, metres=TOLERANCE_M):
     return table
 
 
-def _bars(ax, values, inputs, base=None, metric="F1", metres=TOLERANCE_M, legend=True):
-    """Grouped bars: rows of ``values`` = groups on the x axis, columns = inputs."""
+def nothing(metric):
+    """Score of a map that says 'no' everywhere: it finds nothing, so F1, IoU and recall are
+    0; it marks nothing, so its precision does not exist (None)."""
+    return None if metric == "precision" else 0.0
+
+
+def _bars(ax, values, inputs, base=None, metric="F1", metres=TOLERANCE_M, legend=True,
+          no_line=False):
+    """Grouped bars: rows of ``values`` = groups on the x axis, columns = inputs.
+    ``base``: scores of a map that says yes everywhere (dashed; None = hidden);
+    ``no_line``: also show a map that says no everywhere (dotted)."""
     values[inputs].plot.bar(ax=ax, color=[COLOURS[i] for i in inputs], rot=0, width=0.78,
                             legend=False)
     for c in ax.containers:
@@ -231,6 +241,16 @@ def _bars(ax, values, inputs, base=None, metric="F1", metres=TOLERANCE_M, legend
             if b is not None:
                 ax.hlines(b, k - 0.42, k + 0.42, colors="k", linestyles="--", lw=1.2,
                           label="a map that says yes everywhere" if k == 0 else None)
+    if no_line:
+        label = "a map that says no everywhere"
+        if nothing(metric) is None:     # nothing to draw: say why in the legend
+            ax.plot([], [], color=NO_COLOUR, ls=":", lw=2,
+                    label=label + " (no precision: it marks nothing)")
+        else:
+            for k in range(len(values)):
+                ax.hlines(nothing(metric), k - 0.42, k + 0.42, colors=NO_COLOUR,
+                          linestyles=":", lw=2.5, clip_on=False, zorder=5,
+                          label=label if k == 0 else None)
     ax.set_ylabel(f"{metric} (1 = perfect)\n{tol_text(metres)}")
     ax.set_xlabel("")
     ax.set_ylim(0, 1.06)
@@ -239,11 +259,11 @@ def _bars(ax, values, inputs, base=None, metric="F1", metres=TOLERANCE_M, legend
                   fontsize=8)
 
 
-def fig_scores(table, title, metric="F1"):
+def fig_scores(table, title, metric="F1", yes=True, no=False):
     vals = table[metric].unstack("input")[INPUTS].loc[list(TASK_CLASS)]
     fig, ax = plt.subplots(figsize=(7, 3.8))
-    base = [table.attrs["everywhere"][t][metric] for t in vals.index]
-    _bars(ax, vals, INPUTS, base, metric, table.attrs["metres"])
+    base = [table.attrs["everywhere"][t][metric] for t in vals.index] if yes else None
+    _bars(ax, vals, INPUTS, base, metric, table.attrs["metres"], no_line=no)
     ax.set_title(title, fontsize=10)
     fig.tight_layout()
     return fig
@@ -345,12 +365,12 @@ def oem_table(oem, metres=TOLERANCE_M):
     return table
 
 
-def fig_oem_scores(oem, metric="F1", metres=TOLERANCE_M):
+def fig_oem_scores(oem, metric="F1", metres=TOLERANCE_M, yes=True, no=False):
     table = oem_table(oem, metres)
     vals = table[metric].unstack("input")[OEM_INPUTS].loc[list(TASK_CLASS)]
     fig, ax = plt.subplots(figsize=(8.5, 3.9))
-    base = [table.attrs["everywhere"][t][metric] for t in vals.index]
-    _bars(ax, vals, OEM_INPUTS, base, metric, metres)
+    base = [table.attrs["everywhere"][t][metric] for t in vals.index] if yes else None
+    _bars(ax, vals, OEM_INPUTS, base, metric, metres, no_line=no)
     ax.set_title(f"At home: {oem['n_tiles']} hand-labelled OpenEarthMap tiles in "
                  f"{len(oem['cities'])} cities", fontsize=10)
     fig.tight_layout()
@@ -415,23 +435,26 @@ def _short(name):
     return name.split(",")[0].replace(" office", "").replace(" headquarters", " HQ")
 
 
-def fig_all_places(summary, metric="F1", metres=TOLERANCE_M, own_model=False):
-    """Bars for every place; dashed: a map that says yes everywhere."""
+def fig_all_places(summary, metric="F1", metres=TOLERANCE_M, own_model=False, yes=True,
+                   no=False):
+    """Bars for every place; dashed: a map that says yes everywhere; dotted: no everywhere."""
     value = f"own_model_{metric}" if own_model else metric
     table = all_places(summary, value, metres)
     fig, axes = plt.subplots(1, 2, figsize=(15, 4.2), sharey=True)
     for ax, task in zip(axes, TASK_CLASS):
         t = table.loc[task]
-        base = None if own_model else [
+        base = None if own_model or not yes else [
             summary[n]["scores"][tol_key(metres)][task]["everywhere"][metric] for n in t.index]
         t.index = [_short(n) for n in t.index]
-        _bars(ax, t, INPUTS, base, metric, metres, legend=task == "buildings")
+        _bars(ax, t, INPUTS, base, metric, metres, legend=False, no_line=no and not own_model)
         ax.set_title(task.capitalize() + (" (a model trained on each input)" if own_model else ""))
         ax.tick_params(axis="x", labelsize=8)
-    fig.tight_layout()
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, frameon=False, ncol=5, loc="lower center", fontsize=8)
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
     return fig
 
 
-def show_all_places(summary, metric="F1", metres=TOLERANCE_M):
-    plt.show(fig_all_places(summary, metric, metres))
+def show_all_places(summary, metric="F1", metres=TOLERANCE_M, yes=True, no=False):
+    plt.show(fig_all_places(summary, metric, metres, yes=yes, no=no))
     return all_places(summary, metric, metres)

@@ -2,9 +2,9 @@
 S = {}          # this session: the place that is loaded, the scores
 REFRESH = []    # what to redraw when the place changes
 SCORE_REFRESH = []   # what to redraw when the tolerance or the metric changes
-SCORING = {"metres": TOLERANCE_M, "metric": "F1"}
+SCORING = {"metres": TOLERANCE_M, "metric": "F1", "yes": True, "no": False}
 BEST = ["Sentinel-2", "Stage 1", "Stage 2", "no real difference"]
-_SWITCHES = {"metres": [], "metric": []}
+_SWITCHES = {"metres": [], "metric": [], "yes": [], "no": []}
 _BUSY = [False]
 
 
@@ -46,6 +46,9 @@ def _switch(key):
                             tooltips=["the two maps must agree on the very pixel",
                                       "one pixel of shift is forgiven",
                                       "two pixels of shift are forgiven"])
+    elif key in ("yes", "no"):
+        w = W.Checkbox(value=SCORING[key], indent=False, layout=W.Layout(width="250px"),
+                       description=f"show a map that says {key} everywhere")
     else:
         w = W.ToggleButtons(options=METRICS, value=SCORING["metric"], description="Score",
                             style={"button_width": "80px", "description_width": "150px"},
@@ -58,8 +61,16 @@ def _switch(key):
     return w
 
 
-def _switches(metric=True):
-    return W.VBox([_switch("metres")] + ([_switch("metric")] if metric else []))
+def _switches(metric=True, lines=True):
+    rows = [_switch("metres")] + ([_switch("metric")] if metric else [])
+    if lines:
+        rows.append(W.HBox([W.Label("Compare with", layout=W.Layout(width="150px")),
+                            _switch("yes"), _switch("no")]))
+    return W.VBox(rows)
+
+
+def _lines():
+    return {"yes": SCORING["yes"], "no": SCORING["no"]}
 
 
 # ---- a viewer: move and zoom, the picture follows -------------------------------------------
@@ -127,7 +138,7 @@ def model_at_home(url):
 
     def draw_scores(_=None):
         m, metric = SCORING["metres"], SCORING["metric"]
-        chart.value = _png(fig_oem_scores(oem, metric, m))
+        chart.value = _png(fig_oem_scores(oem, metric, m, **_lines()))
         tab = oem_table(oem, m).copy()
         tab.index = [f"{t}, {i}" for t, i in tab.index]
         table.value = tab.to_html(float_format="%.2f")
@@ -223,7 +234,8 @@ def show_scores():
             W.HBox([W.Image(value=_png(fig_reference(p)), format="png",
                             layout=W.Layout(width="400px")),
                     W.Image(value=_png(fig_scores(table, f"{p.name}: the land-cover model "
-                                                         "against the public maps", metric)),
+                                                         "against the public maps", metric,
+                                                  **_lines())),
                             format="png", layout=W.Layout(width="560px"))]),
             W.HTML(_pre("\n".join(guess_lines(table, guesses, metric)))),
             W.HTML(tab.to_html(float_format="%.2f")))
@@ -311,11 +323,12 @@ def all_places_view(url, own_model=False):
 
     def draw(_=None):
         m, metric = SCORING["metres"], SCORING["metric"]
-        chart.value = _png(fig_all_places(summary, metric, m, own_model))
+        chart.value = _png(fig_all_places(summary, metric, m, own_model,
+                                          **({} if own_model else _lines())))
         value = f"own_model_{metric}" if own_model else metric
         table.value = all_places(summary, value, m).to_html(float_format="%.2f")
     SCORE_REFRESH.append(draw)
     draw()
-    ui = W.VBox([_switches(), chart, table])
+    ui = W.VBox([_switches(lines=not own_model), chart, table])
     UI["own" if own_model else "all"] = ui
     display(ui)

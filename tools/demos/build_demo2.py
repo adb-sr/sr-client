@@ -193,8 +193,14 @@ For each tile there are four images of the same place:
 * **A pixel counts**: two maps never line up to the metre. *Pixel-exact* counts only the very
   same pixel; *within 2.5 m* forgives a shift of one pixel; *within 5 m* forgives two. The
   more you forgive, the higher every score.
-* **The dashed line** is the score of a useless map that says "building" (or "road")
-  everywhere. A map is only worth something where it is clearly above that line.
+* **Two useless maps to compare with** (tick them on or off):
+  * a map that says **"building" everywhere** (dashed line). In a dense city it scores high,
+    because almost every spot is near a building. A map is only worth something where it is
+    clearly above this line.
+  * a map that says **"no building" anywhere** (dotted line). It scores 0 on F1, IoU and
+    recall, and has no precision at all: it marks nothing. Yet 83 % of its pixels are right
+    here, and 95 % in Nueva Ecija, because most pixels are not buildings. That is why maps of
+    rare things are not scored by the share of pixels right.
 
 * **The confusion matrix** (under the examples) shows, for each class drawn by hand, which
   class the model gave those pixels. The diagonal is right; everything else is a confusion.

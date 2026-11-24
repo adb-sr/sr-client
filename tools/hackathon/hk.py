@@ -413,93 +413,114 @@ def ifs_gallery(task, units, idx, key="stage2", stretch="auto", ctx=128, title="
     plt.show()
 
 
-# --------------------------------------------------------------------------- building damage (xBD)
+# --------------------------------------------------------------------------- land cover (Hanoi)
 
-XBD_COLOURS = np.array([[0, 0, 0], [70, 130, 220], [240, 120, 20]], np.uint8) / 255.0
+LC_NAMES = ["building", "road", "water", "tree", "low vegetation", "cropland", "bare soil or sand"]
+LC_COLOURS = np.array([[215, 48, 39], [99, 99, 99], [43, 131, 186], [26, 120, 50], [166, 217, 106],
+                       [240, 210, 80], [191, 129, 45], [255, 255, 255]], np.uint8) / 255.0
 
 
-def xbd_metric_table(task):
-    cm = {inp: np.zeros((3, 3), np.int64) for inp in task.inputs}
+def lc_metric_table(task):
+    """IoU per class and mean IoU per input, pooled over all tiles (pixel by pixel)."""
+    cm = {inp: np.zeros((7, 7), np.int64) for inp in task.inputs}
     for sid in task.scenes.index:
-        lab, val = task.arr(sid, "label"), task.arr(sid, "valid")
-        v = val & (lab != 255)
-        t = lab[v].astype(np.int64)
+        v = task.arr(sid, "valid")
+        t = task.arr(sid, "label")[v].astype(np.int64)
         for inp in task.inputs:
             p = task.arr(sid, f"pred_{inp}")[v].astype(np.int64)
-            cm[inp] += np.bincount(t * 3 + p, minlength=9).reshape(3, 3)
-    paper = {(r["input"], r["metric"]): r.get("paper") for r in task.meta["metric_table"]}
+            cm[inp] += np.bincount(t * 7 + p, minlength=49).reshape(7, 7)
+    paper = {r["input"]: r.get("paper") for r in task.meta["metric_table"]}
     rows = []
     for inp, c in cm.items():
         iou = np.diag(c) / np.maximum(c.sum(0) + c.sum(1) - np.diag(c), 1)
-        b_tp = c[1:, 1:].sum()
-        b_f1 = 2 * b_tp / max(2 * b_tp + c[0, 1:].sum() + c[1:, 0].sum(), 1)
-        d_f1 = 2 * c[2, 2] / max(2 * c[2, 2] + c[:, 2].sum() - c[2, 2] + c[2, :].sum() - c[2, 2], 1)
-        rows.append({"input": task.labels[inp], "finds buildings (F1)": round(b_f1, 3),
-                     "finds damaged buildings (F1)": round(d_f1, 3), "mIoU (3 classes)": round(iou.mean(), 3),
-                     "paper building F1": paper.get((inp, "Building F1 (intact + damaged)"))})
+        rows.append({"input": task.labels[inp], **{n: round(v, 2) for n, v in zip(LC_NAMES, iou)},
+                     "mean (mIoU)": round(iou.mean(), 3), "paper mIoU": paper.get(inp)})
     return pd.DataFrame(rows).set_index("input")
 
 
-def xbd_units(task, event=None, target="damaged"):
-    """One place = one xBD patch (~0.25 km2). truth = m2 of damaged (or all) buildings in the
-    reference; prediction = m2 the model labels as damaged (or as any building)."""
-    sc = task.scenes if event in (None, "all") else task.scenes[task.scenes.event == event]
-    cls = (2,) if target == "damaged" else (1, 2)
+def lc_units(task, cell_m=80, target=6, min_valid=0.8):
+    """Cut every tile into square cells of cell_m metres. For each cell: the true share of the
+    target class(es) and, per input, the share the task model labels as that class. Only
+    labelled pixels count; cells less than min_valid labelled are left out."""
+    c = max(4, int(round(cell_m / task.px)))
+    cls = tuple(np.atleast_1d(target))
     rows, preds = [], {inp: [] for inp in task.inputs}
-    for sid, s in sc.iterrows():
+    for sid in task.scenes.index:
         lab, val = task.arr(sid, "label"), task.arr(sid, "valid")
-        v = val & (lab != 255)
-        a = float(s.px_m_x) * float(s.px_m_y)
-        rows.append({"scene": sid, "event": s.event, "valid": v.mean(),
-                     "truth": np.isin(lab, cls)[v].sum() * a,
-                     "buildings_m2": np.isin(lab, (1, 2))[v].sum() * a,
-                     "damaged_m2": (lab == 2)[v].sum() * a})
+        H, W = lab.shape
+        ny, nx = H // c, W // c
+
+        def blocks(a):
+            return a[:ny * c, :nx * c].reshape(ny, c, nx, c).sum((1, 3)).ravel()
+        nv = blocks(val.astype(np.float32))
+        nt = blocks((np.isin(lab, cls) & val).astype(np.float32))
         for inp in task.inputs:
-            preds[inp].append(np.isin(task.arr(sid, f"pred_{inp}"), cls)[v].sum() * a)
+            p = np.isin(task.arr(sid, f"pred_{inp}"), cls) & val
+            preds[inp].append(blocks(p.astype(np.float32)) / np.maximum(nv, 1))
+        for i in range(ny * nx):
+            rows.append({"scene": sid, "group": task.scenes.loc[sid, "group"], "y0": (i // nx) * c,
+                         "x0": (i % nx) * c, "size": c, "valid": nv[i] / c / c,
+                         "truth": nt[i] / max(nv[i], 1)})
     units = pd.DataFrame(rows)
-    preds = {k: np.array(v)[None, :] for k, v in preds.items()}
-    print(f"{len(units):,} patches" + (f" in {event}" if event not in (None, 'all') else ""))
+    keep = units["valid"].values >= min_valid
+    units = units[keep].reset_index(drop=True)
+    preds = {k: np.concatenate(v)[keep][None, :] for k, v in preds.items()}
+    print(f"{len(units):,} cells of {c * task.px:.0f} m x {c * task.px:.0f} m in "
+          f"{units.scene.nunique()} tiles (cells less than {min_valid:.0%} labelled are left out)")
     return units, preds
 
 
-def xbd_show(task, sid, inputs=None, stretch="auto", title=None):
-    """Rows: pre-event image, post-event image, model output (black background, blue intact,
-    orange damaged). The last column of the bottom row is the reference."""
-    inputs = inputs or task.inputs
+def _lc_rgb(lab):
+    return LC_COLOURS[np.where(lab == 255, 7, lab)]
+
+
+def lc_show(task, sid, inputs=None, stretch="auto", target=None, box=None, title=None):
+    """Top row: the images. Bottom row: the land cover the task model draws on each input; the
+    last column is the expert map (white = not labelled). target: outline one class in black."""
+    inputs = inputs or ["s2_10m"] + task.inputs
     cols = inputs + ["reference"]
-    fig, axes = plt.subplots(3, len(cols), figsize=(2.5 * len(cols), 7.8), squeeze=False)
     lab = task.arr(sid, "label")
+    edge = _outline(np.isin(lab, np.atleast_1d(target))) if target is not None else None
+    fig, axes = plt.subplots(2, len(cols), figsize=(2.5 * len(cols), 5.5), squeeze=False)
     for j, key in enumerate(cols):
+        ax, bx = axes[0, j], axes[1, j]
         if key == "reference":
-            lab3 = np.where(lab == 255, 0, lab)
-            rgb = XBD_COLOURS[lab3]
-            rgb[lab == 255] = 0.35
-            axes[2, j].imshow(rgb, interpolation="nearest")
-            axes[2, j].set_title("reference")
-            axes[0, j].axis("off"), axes[1, j].axis("off")
+            ax.axis("off")
+            bx.imshow(_lc_rgb(lab), interpolation="nearest")
+            bx.set_title("expert map")
         else:
-            for r, pre in ((0, True), (1, False)):
-                im = task.view(sid, key, stretch, pre=pre)
-                if im is None:
-                    _blank(axes[r, j], "image not\ndownloaded")
-                else:
-                    axes[r, j].imshow(im)
-            axes[0, j].set_title(SHORT.get(key, key))
-            axes[2, j].imshow(XBD_COLOURS[task.arr(sid, f"pred_{key}")], interpolation="nearest")
-        for r in range(3):
-            axes[r, j].set_xticks([]), axes[r, j].set_yticks([])
-    axes[0, 0].set_ylabel("before"), axes[1, 0].set_ylabel("after"), axes[2, 0].set_ylabel("model output")
+            im = task.view(sid, key, stretch)
+            if im is None:
+                _blank(ax, "image not\ndownloaded")
+            else:
+                ax.imshow(im, interpolation="nearest")
+            ax.set_title(SHORT.get(key, key))
+            if key == "s2_10m":
+                _blank(bx, "(the model sees the\nupsampled version)")
+            else:
+                bx.imshow(_lc_rgb(task.arr(sid, f"pred_{key}")), interpolation="nearest")
+        if edge is not None and key != "s2_10m":
+            _overlay(bx, edge, "black")
+        if box:
+            for b in (ax, bx):
+                b.add_patch(Rectangle((box[1] - .5, box[0] - .5), box[2], box[2], fill=False,
+                                      ec="#d73027", lw=2))
+        for b in (ax, bx):
+            b.set_xticks([]), b.set_yticks([])
+    axes[1, 0].set_ylabel("land cover drawn")
     s = task.scenes.loc[sid]
-    fig.suptitle(title or f"{sid}  (event start {s.event_start}; images after: S2 {s.s2_date}, "
-                          f"high-res {s.hr_date})", x=0.01, ha="left")
-    fig.legend(handles=[Patch(color=XBD_COLOURS[1], label="intact building"),
-                        Patch(color=XBD_COLOURS[2], label="damaged building"),
-                        Patch(color="#595959", label="not scored")], loc="lower center", ncol=3, frameon=False)
-    plt.tight_layout(rect=(0, 0.03, 1, 1))
+    fig.suptitle(title or f"{sid}  ({s.group}, 640 m across)", x=0.01, ha="left")
+    fig.legend(handles=[Patch(color=LC_COLOURS[i], label=n) for i, n in enumerate(LC_NAMES)]
+               + [Patch(fc="white", ec="#999", label="not labelled")],
+               loc="lower center", ncol=8, frameon=False, fontsize=8)
+    plt.tight_layout(rect=(0, 0.05, 1, 1))
     plt.show()
 
 
-def xbd_gallery(task, units, idx, key="stage2", stretch="auto", title="", hit=None):
+def lc_gallery(task, units, idx, key="stage2", stretch="auto", ctx=96, title="", hit=None,
+               target=6):
+    """Thumbnails of chosen cells (with some context), the target class outlined in black from
+    the expert map, framed green (hit) or red (not a hit)."""
     idx = list(idx)
     cols = min(len(idx), 8) or 1
     rws = int(np.ceil(len(idx) / cols)) or 1
@@ -509,15 +530,18 @@ def xbd_gallery(task, units, idx, key="stage2", stretch="auto", title="", hit=No
     for ax, i in zip(axes.flat, idx):
         u = units.iloc[i]
         im = task.view(u.scene, key, stretch)
-        if im is not None:
-            ax.imshow(im)
-        _overlay(ax, _outline(task.arr(u.scene, "label") == 2), "#f07814")
+        H, W = im.shape[:2]
+        ctx_ = max(ctx, int(u["size"]) + 16)
+        cy, cx = u.y0 + u["size"] // 2, u.x0 + u["size"] // 2
+        y0 = int(np.clip(cy - ctx_ // 2, 0, max(H - ctx_, 0)))
+        x0 = int(np.clip(cx - ctx_ // 2, 0, max(W - ctx_, 0)))
+        ax.imshow(im[y0:y0 + ctx_, x0:x0 + ctx_])
+        lab = task.arr(u.scene, "label")[y0:y0 + ctx_, x0:x0 + ctx_]
+        _overlay(ax, _outline(np.isin(lab, np.atleast_1d(target))), "black")
         good = bool(hit[i]) if hit is not None else None
-        for s in ("left", "right", "top", "bottom"):
-            ax.spines[s].set_visible(True)
-        ax.add_patch(Rectangle((0, 0), 1, 1, transform=ax.transAxes, fill=False,
-                               ec=HIT_C if good else MISS_C, lw=5))
-        ax.set_title(f"{u.damaged_m2:,.0f} m2 damaged", fontsize=8)
+        ax.add_patch(Rectangle((u.x0 - x0 - .5, u.y0 - y0 - .5), u["size"], u["size"], fill=False,
+                               ec=HIT_C if good else MISS_C, lw=2.5))
+        ax.set_title(f"true {u.truth:.0%}", fontsize=8)
     fig.suptitle(title, x=0.01, ha="left")
     plt.tight_layout()
     plt.show()

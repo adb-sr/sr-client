@@ -32,7 +32,7 @@ def code(s, hidden=False):
 
 
 FOLDER = {"hackathon_informal_settlements": "informal_settlements",
-          "hackathon_building_damage": "building_damage",
+          "hackathon_land_cover": "land_cover",
           "hackathon_field_boundaries": "field_boundaries"}
 
 
@@ -321,83 +321,89 @@ READY_MADE = {
     return name, cells
 
 
-# --------------------------------------------------------------------------- building damage
+# --------------------------------------------------------------------------- land cover (Hanoi)
 
-def xbd():
-    name = "hackathon_building_damage"
+HANOI_INPUTS_MD = INPUTS_MD.replace("the real commercial image resampled",
+                                    "the real Pléiades Neo image resampled")
+
+
+def hanoi():
+    name = "hackathon_land_cover"
     cells = header(
-        name, "building damage after disasters",
-        "After a typhoon, would you use super-resolved Sentinel-2 to decide **where to send damage "
-        "assessment teams first**, and how?",
-        "*Data: xBD benchmark, 1,577 areas of about 0.25 km² from five disasters (Hurricane "
-        "Matthew in Haiti, floods in Nepal, the Santa Rosa wildfire, the Sunda Strait tsunami and "
-        "the Fuego volcano eruption), with every building marked intact or damaged by experts.*")
-    cells += [load_cell("xbd_damage"),
+        name, "land cover around Hanoi",
+        "Would you use super-resolved Sentinel-2 to decide **which places to inspect** (for example "
+        "open construction sites that raise dust, new buildings on farmland, or missing roads), "
+        "and how?",
+        "*Data: 92 tiles of 640 m × 640 m around Hanoi, Vietnam (about 38 km²), where experts "
+        "mapped seven kinds of land cover on 0.5 m Pléiades Neo images. Hanoi's mix of dense "
+        "villages, rice fields, ponds and building sites looks much like the edges of Metro Manila, "
+        "Bulacan or Pampanga.*")
+    cells += [load_cell("hanoi_landcover", extras=("hanoi_landcover_hr",)),
               md(f"""
 ## 1. The data
 
-For each area there is an image **before** and **after** the event. Experts outlined every
-building on the real high-resolution images (Maxar, about 0.5 m) and marked it intact or
-damaged.
+Experts mapped seven classes on real high-resolution images (Pléiades Neo, 0.5 m): **building,
+road, water, tree, low vegetation, cropland, bare soil or sand**. About a third of the pixels
+were left unlabelled (white in the expert map); they do not count anywhere.
 
-The task model was trained on the real high-resolution before-and-after images. It has **never
-seen a super-resolved image**: we give it each input and see what it finds. It labels every
-pixel as background, intact building or damaged building.
-{INPUTS_MD}
-Note: the Sentinel-2 images were taken on different days from the high-resolution ones, up to
-a few weeks after the event, so some damage may already be cleared or rebuilt.
+One task model was trained on the real high-resolution images (resampled to 2.5 m). It has
+**never seen a super-resolved image**: we give it each input and see what it draws. This is the
+"reuse a model you already have" path from Session 3.
+{HANOI_INPUTS_MD}
+The real high-resolution images are licensed for this workshop only. If they did not
+download, everything still works: you just will not see those pictures.
 """),
               code("""
-# The Hurricane Matthew area with the largest share of damaged buildings among areas whose
-# high-res image is complete (also the example in our paper)
-example = "hurricane-matthew_00000089"
-xbd_show(task, example)
+# A well-labelled tile with much bare soil and sand: images (top), what the model draws (bottom)
+example = task.scenes[task.scenes.valid_share >= 0.8].share_6.idxmax()
+lc_show(task, example, target=6)
 """),
               md("""
 ## 2. How good is the model on each input?
 
-Pixel by pixel against the expert labels. **F1** combines false alarms and misses (0 = nothing
-right, 1 = perfect). Two questions are scored separately: *where are the buildings?* and *which
-buildings are damaged?*
+Pixel by pixel against the expert map. **IoU** (intersection over union) per class: 0 = nothing
+right, 1 = perfect. *mIoU* is the mean over the seven classes; "paper" is the value in our paper.
 """),
-              code("xbd_metric_table(task)"),
+              code("lc_metric_table(task)"),
               md("""
-**What this says.** Super-resolution helps the model **find buildings** (F1 from 0.31 to 0.54;
-real images 0.79). It does **not** help it tell **damaged** from intact buildings (0.21 on
-plain Sentinel-2 and on stage 2; stage 1 is worse). The rest of the notebook asks which of these
-matters for **where you send teams**.
+**What this says.** Super-resolution closes about two thirds of the gap between Sentinel-2 and
+real images (mIoU 0.32 → 0.47; real 0.57), and stage 2, with its synthesised texture, does best.
+Look at the columns, though: trees, water and buildings gain the most, while bare soil and sand
+barely move (0.19 → 0.25; real 0.34). A pixel score is not a decision. The rest of the notebook
+asks whether these differences change **where you would send inspectors**, and the answer is not
+always the one this table suggests.
 
 ## 3. Look around, including failures
 
-Choose an event and move the slider (1 = the most damaged area of that event); the picture
-follows at once. Rows: before, after, model output (blue intact, orange damaged). Look for:
-* damage the model sees on real images but not on super-resolved ones, and the reverse;
-* areas where the after image is cloudy, hazy or taken long after the event.
+Choose a class to sort the tiles by, then a tile; the picture follows at once. Top row: what the
+model sees. Bottom row: the land cover it draws, and the expert map on the right; the black line
+outlines the chosen class in the expert map. Look for:
+* buildings, roads or bare soil drawn on super-resolved images but not on real ones: **invented**?
+* small things (a lane, a house in the fields, a building site) that only the real image shows;
+* river sandbanks drawn as bare soil: a dust source, a sand mine, or a false alarm for you?
 """),
               code("explore(task)"),
               *scenario_cells(),
               md("""
 ## 5. The decision cell
 
-For every area and every input, the model's map gives a score: the square metres it labels as
-**damaged** building (or as any building, if your decision is about where people live). You send
-teams to the **highest-scoring areas**, up to your budget. Afterwards, the expert labels tell us
-which deployments were hits.
+The map is cut into square cells. For every cell and every input, the model's map gives a
+score: the share of the cell it draws as the land cover you look for. You inspect the
+**highest-scoring cells**, up to your budget. Afterwards, the expert map tells us which
+inspections were hits.
 
-Pick the event that is closest to your hazards (the Guatemala and Sunda events are too small to
-rank on their own). Set the other controls to match your scenario: the chart and the table
-follow at once, and so do parts 6 and 9.
+Set the controls to match your scenario: the chart and the table follow at once, and so do
+parts 6 and 9. Try other classes too: some decisions change with super-resolution, others do
+not.
 """),
               code("decision_panel(task)"),
               md("""
-**How to read it.** *Hits* = deployments to an area that meets your hit rule. *Random* is what
+**How to read it.** *Hits* = inspections of a cell that meets your hit rule. *Random* is what
 you would expect without any map; *perfect* is the best your budget allows. *Cost* = wasted
-deployments × their cost + missed areas × their cost, in your units. There is one task model
+inspections × their cost + missed places × their cost, in your units. There is one task model
 here, so there is no range.
 
-Try ranking by **any buildings**: knowing **where buildings are** is a different decision (e.g.
-where to pre-position relief) and may give a different answer. Does the advantage hold for other
-budgets? (This chart follows part 5 too.)
+Does the advantage hold for a smaller or bigger budget? (This chart follows part 5 too.)
 """),
               code("sweep_view()"),
               *overlap_cells(),
@@ -405,39 +411,37 @@ budgets? (This chart follows part 5 too.)
 ## 7. Optional: improve the baseline
 
 Only if you have time, and only if it helps your decision. Ideas:
-* **Damage share instead of damage area**: rank by damaged ÷ all building pixels. Does it help
-  find the worst-hit areas, or only the small ones?
-* **Mix inputs**: buildings from stage 2 (best at finding buildings) and damage from plain
-  Sentinel-2. The predicted maps are in `task.arr(area, "pred_stage2")` (0 background, 1 intact,
-  2 damaged).
-* **Change, not state**: the model looks at before and after together and cannot use the change
-  between them. A simple before/after difference of Sentinel-2 brightness inside predicted
-  buildings is a cheap damage signal: try it.
+* **Combine classes**: e.g. buildings on farmland (worked example in the next cell).
+* **Mix inputs**: e.g. inspect a cell only if both stage 1 and stage 2 draw bare soil there.
+* The predicted maps are in `task.arr(tile, "pred_stage2")` (class numbers 0–6, in the order of
+  the table in part 2) if you want to compute your own score.
 
 `current()` gives the decision of part 5 as it is set now; `decide`, `plot_decision` and
 `sweep` work on anything of the same shape.
 """),
               code("""
 units, preds, hit, res = current()   # the decision of part 5, as it is set now
-units.head()
+
+# Worked example: buildings on farmland (cells with >= 5 % buildings and >= 30 % cropland)
+u_b, p_b = lc_units(task, cell_m=80, target=0)
+u_c, p_c = lc_units(task, cell_m=80, target=5)
+hit_bf = (u_b.truth.values >= 0.05) & (u_c.truth.values >= 0.3)
+score = {k: p_b[k] * (p_c[k] >= 0.3) for k in p_b}
+decide(u_b, score, hit_bf, 20, labels=labels)
 """),
-              *api_cells('''
-EVENT_DAY = "2021-12-16"   # Typhoon Odette (Rai) made landfall on Siargao
+              *api_cells("""
 READY_MADE = {
-    "Siargao, General Luna: before Odette": dict(
-        area=area_around(9.7840, 126.1560, km=3), date="2021-12-15",
-        options=dict(time_window={"days_before": 90, "days_after": 0})),
-    "Siargao, General Luna: after Odette": dict(
-        area=area_around(9.7840, 126.1560, km=3), date="2021-12-17",
-        options=dict(time_window={"days_before": 0, "days_after": 60})),
+    # name: area, date and options; run before the workshop, so they come back fast
+    "Hanoi, Red River banks (the area of this dataset)": dict(area=area_around(21.0787, 105.7822, km=3), date="2025-11-15"),
+    "Payatas, Quezon City": dict(area=area_around(14.7130, 121.1000, km=3), date="2026-03-15"),
 }
-''', "December is cloudy in Siargao, so these may have few clear Sentinel-2 images: watch for "
-     "the `low_diversity` warning. Compare before and after: would you trust what you see for a "
-     "damage decision?", 9.7840, 126.1560),
+""", "There is no land-cover model in this part. Use it to look: would *you* spot the building "
+     "sites, sand yards or new roads you know on stage 1 or stage 2?", 21.0787, 105.7822),
               md(SLIDE_MD),
               code("slide_card()"),
-              md(FOOTER + "\nxBD (Gupta et al. 2019; Maxar Open Data / xView2): CC BY-NC-SA 4.0, "
-                 "non-commercial use.")]
+              md(FOOTER + "\nLand-cover labels and Pléiades Neo images: benchmark of Retnanto et al. "
+                 "(2026, IEEE JSTARS). Real high-resolution images: Pléiades Neo (Airbus), workshop "
+                 "use only.")]
     return name, cells
 
 
@@ -557,7 +561,7 @@ READY_MADE = {
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
-    for build in (ifs, xbd, ai4):
+    for build in (ifs, hanoi, ai4):
         name, cells = build()
         nb = nbf.v4.new_notebook(cells=cells)
         nb.metadata.update({"colab": {"provenance": [], "toc_visible": True},

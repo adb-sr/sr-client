@@ -159,33 +159,25 @@ def explore(task):
 
         def render():
             ifs_show(task, tile.value, model=model.value, thr=thr.value, stretch=stretch.value)
-    elif kind == "xbd_damage":
-        counts = task.scenes.event.value_counts()
-        event = W.Dropdown(options=[(f"{e} ({counts[e]} areas)", e) for e in counts.index],
-                           value="hurricane-matthew", description="Event", layout=_WIDE,
-                           style=_LABEL)
-        rank = W.IntSlider(value=1, min=1, max=int(counts["hurricane-matthew"]),
-                           continuous_update=False, layout=_WIDE, style=_LABEL,
-                           description="Area (1 = most damaged)")
-        controls = [event, rank, stretch]
+    elif kind == "hanoi_landcover":
+        sort_by = W.Dropdown(options=[(n, i) for i, n in enumerate(LC_NAMES)], value=6,
+                             description="Sort tiles by", layout=_WIDE, style=_LABEL)
+        tile = W.Dropdown(description="Tile (most first)", layout=_WIDE, style=_LABEL)
+        outline = W.Checkbox(value=True, description="Outline that class (expert map) in black",
+                             layout=_WIDE, style=_LABEL)
+        controls = [sort_by, tile, outline, stretch]
 
-        def areas():
-            return task.scenes[task.scenes.event == event.value].sort_values(
-                "n_damaged_px", ascending=False)
-
-        def on_event(_):
-            rank.max = len(areas())
-            rank.value = min(rank.value, rank.max)
-        event.observe(on_event, names="value")
+        def tiles(_=None):
+            col = f"share_{sort_by.value}"
+            sc = task.scenes.sort_values(col, ascending=False)
+            tile.options = [(f"{sid}  ({v:.0%} {LC_NAMES[sort_by.value]})", sid)
+                            for sid, v in sc[col].items()]
+        sort_by.observe(tiles, names="value")
+        tiles()
 
         def render():
-            a = areas()
-            sid = a.index[rank.value - 1]
-            s = a.loc[sid]
-            status.value = _note(f"{sid}: {s.n_damaged_px * s.px_m_x * s.px_m_y:,.0f} m² of "
-                                 f"damaged buildings, {s.n_building_px * s.px_m_x * s.px_m_y:,.0f}"
-                                 " m² of buildings in all (expert labels)", "#555")
-            xbd_show(task, sid, stretch=stretch.value)
+            lc_show(task, tile.value, stretch=stretch.value,
+                    target=sort_by.value if outline.value else None)
     else:
         area = W.Dropdown(options=[(f"{sid}  ({int(s.n_fields):,} fields)", sid)
                                    for sid, s in task.scenes.iterrows()],
@@ -249,14 +241,16 @@ EXAMPLES = {
         cost_of_wasted_visit="1 survey day for a team of 2",
         cost_of_missed_place="a settlement left out of the programme for a year: about 3 survey "
                              "days' worth"),
-    "xbd_damage": dict(
+    "hanoi_landcover": dict(
         team="Team B",
-        decision_maker="Provincial disaster office (PDRRMO), first 72 hours after a typhoon",
-        decision="Which areas get a rapid damage assessment team first",
-        budget="20 team deployments, one 0.25 km2 area each",
-        hit="an area with at least 5,000 m2 of damaged buildings (about 50 houses)",
-        cost_of_wasted_visit="1 team-day that could have gone to a badly hit area",
-        cost_of_missed_place="relief to ~50 households delayed by days: about 5 team-days' worth"),
+        decision_maker="City environment department, air-quality enforcement unit",
+        decision="Which 80 m x 80 m cells get a dust-control inspection this month (open construction "
+                 "sites, cleared land, sand yards)",
+        budget="20 inspections",
+        hit="a cell where at least 20 % of the ground is bare soil or sand",
+        cost_of_wasted_visit="1 inspector-day",
+        cost_of_missed_place="a dust source left uncontrolled for a month: about 3 inspector-days' "
+                             "worth"),
     "ai4_fields": dict(
         team="Team C",
         decision_maker="Department of Agriculture regional office, smallholder support programme",
@@ -318,30 +312,34 @@ def decision_panel(task):
         def title():
             return f"Survey {budget.value} blocks of {size.value} m: how many are hits?"
         place_word = "blocks"
-    elif kind == "xbd_damage":
-        event = W.ToggleButtons(options=["hurricane-matthew", "nepal-flooding",
-                                         "santa-rosa-wildfire", "all"],
-                                value="hurricane-matthew", description="Event",
-                                style=_buttons("150px"),
-                                tooltips=["", "", "", "all five events together"])
-        target = W.ToggleButtons(options=[("damaged buildings", "damaged"),
-                                          ("any buildings", "buildings")], value="damaged",
-                                 description="Rank areas by", style=_buttons("150px"))
-        budget = _int_slider(20, 5, 100, 5, "Budget (teams you send)")
-        hit_at = _int_slider(5000, 500, 20000, 500, "Hit = at least this many m²")
-        cw, cm = _cost(1, "Cost of a wasted deployment"), _cost(5, "Cost of a missed area")
-        unit_controls, controls = [event, target], [event, target, budget, hit_at, cw, cm]
+    elif kind == "hanoi_landcover":
+        target = W.Dropdown(options=[(n, i) for i, n in enumerate(LC_NAMES)]
+                            + [("built-up (building + road)", (0, 1)),
+                               ("green (tree + low vegetation)", (3, 4))],
+                            value=6, description="Land cover you look for", layout=_WIDE,
+                            style=_LABEL)
+        size = W.ToggleButtons(options=[("40 m", 40), ("80 m", 80), ("160 m", 160)],
+                               value=80, description="Cell size", style=_buttons("80px"))
+        budget = _int_slider(20, 5, 100, 5, "Budget (cells you inspect)")
+        hit_at = W.FloatSlider(value=0.2, min=0.05, max=0.9, step=0.05, continuous_update=False,
+                               readout_format=".0%", layout=_WIDE, style=_LABEL,
+                               description="Hit = share of the cell at least")
+        cw, cm = _cost(1, "Cost of a wasted visit"), _cost(3, "Cost of a missed place")
+        unit_controls, controls = [target, size], [target, size, budget, hit_at, cw, cm]
+
+        def what():
+            return next(n for n, v in target.options if v == target.value)
 
         def places():
-            return xbd_units(task, event.value, target=target.value)
+            return lc_units(task, cell_m=size.value, target=target.value)
 
         def settings():
-            what = "damaged buildings" if target.value == "damaged" else "buildings"
-            return {"event": event.value, "hit": f"≥ {hit_at.value:,} m² of {what}"}
+            return {"looking for": what(), "cell": f"{size.value} m",
+                    "hit": f"{what()} ≥ {hit_at.value:.0%} of the cell"}
 
         def title():
-            return f"{event.value}: send {budget.value} teams, how many reach a hit?"
-        place_word = "areas"
+            return f"Inspect {budget.value} cells of {size.value} m ({what()}): how many are hits?"
+        place_word = "cells"
     else:
         budget = _int_slider(30, 5, 100, 5, "Budget (squares you visit)")
         size = W.ToggleButtons(options=[("250 m", 250), ("500 m", 500), ("1 km", 1000)],
@@ -381,6 +379,7 @@ def decision_panel(task):
             res, _, said2 = _run(decide, units, preds, hit, budget.value, cw.value, cm.value,
                                  labels=labels)
             S.update(units=units, preds=preds, hit=hit, res=res, budget=budget.value,
+                     target=target.value if kind == "hanoi_landcover" else None,
                      hit_at=hit_at.value,
                      cost_wasted=cw.value, cost_missed=cm.value, title=title(),
                      settings={"budget": budget.value, **settings(),
@@ -436,11 +435,12 @@ def sweep_view():
 # ---- part 6: which places, and the failures --------------------------------------------------
 
 def _gallery(task, idx, key, title):
-    fn = {"ifs_manila": ifs_gallery, "xbd_damage": xbd_gallery, "ai4_fields": ai4_gallery}[
+    fn = {"ifs_manila": ifs_gallery, "hanoi_landcover": lc_gallery, "ai4_fields": ai4_gallery}[
         _kind(task)]
     if not len(idx):
         return []
-    _, pngs, _ = _run(fn, task, S["units"], idx, key=key, hit=S["hit"], title=title)
+    extra = {"target": S["target"]} if _kind(task) == "hanoi_landcover" else {}
+    _, pngs, _ = _run(fn, task, S["units"], idx, key=key, hit=S["hit"], title=title, **extra)
     return pngs
 
 
@@ -449,8 +449,8 @@ def _detail(task, i):
     kind = _kind(task)
     if kind == "ifs_manila":
         return _run(ifs_show, task, u.scene, box=(u.y0, u.x0, u["size"]))[1]
-    if kind == "xbd_damage":
-        return _run(xbd_show, task, u.scene)[1]
+    if kind == "hanoi_landcover":
+        return _run(lc_show, task, u.scene, target=S["target"], box=(u.y0, u.x0, u["size"]))[1]
     return _run(ai4_show, task, u.scene, y0=int(u.y0), x0=int(u.x0), size=int(u["size"]))[1]
 
 
@@ -466,8 +466,7 @@ def picks_view(max_shown=16):
     pick = W.ToggleButtons(options=[(labels[k], k) for k in task.inputs],
                            value="stage2" if "stage2" in task.inputs else task.inputs[-1],
                            description="Places picked with", style=_buttons("120px"))
-    default_img = "hr" if (_kind(task) == "xbd_damage" and task.has_image.get("hr")) else (
-        "stage1" if _kind(task) == "ai4_fields" else "stage2")
+    default_img = "stage1" if _kind(task) == "ai4_fields" else "stage2"
     on = W.ToggleButtons(options=[(labels[k], k) for k in shown], value=default_img,
                          description="Shown on the image of", style=_buttons("120px"))
     galleries = W.VBox([])

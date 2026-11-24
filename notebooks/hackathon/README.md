@@ -11,12 +11,12 @@ Pick one task:
 | Task | Decision it feeds (example) | Notebook |
 |---|---|---|
 | [Informal settlements, Metro Manila](informal_settlements/README.md) | Which city blocks get a field survey | [Open in Colab](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/hackathon/informal_settlements/hackathon_informal_settlements.ipynb) |
-| [Building damage after disasters](building_damage/README.md) | Where to send damage-assessment teams first | [Open in Colab](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/hackathon/building_damage/hackathon_building_damage.ipynb) |
+| [Land cover around Hanoi](land_cover/README.md) | Which places to inspect (e.g. dust from building sites, buildings on farmland) | [Open in Colab](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/hackathon/land_cover/hackathon_land_cover.ipynb) |
 | [Field boundaries of smallholder farms](field_boundaries/README.md) | Which areas get extension-worker visits | [Open in Colab](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/hackathon/field_boundaries/hackathon_field_boundaries.ipynb) |
 
 Each notebook:
 
-1. downloads a small data package (7–240 MB) with the images, expert labels and the task model's
+1. downloads a small data package (7–170 MB) with the images, expert labels and the task model's
    predictions on each input, all computed before the workshop, so it runs on a normal
    computer in seconds;
 2. shows how good the model is on Sentinel-2, SR stage 1, SR stage 2 and real high-resolution

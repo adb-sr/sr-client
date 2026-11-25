@@ -24,7 +24,7 @@ job.download("results/")              # every file, under results/<job id>/
 ```
 
 A [Colab notebook](notebooks/workshop.ipynb) walks through the whole thing. Two more notebooks
-go with the SSTA workshop sessions:
+go with the SSTA workshop sessions ([all notebooks, with links to open them in Colab](notebooks/README.md)):
 
 - [`demo1_super_resolution.ipynb`](notebooks/demo1_super_resolution.ipynb): one notebook for
   presenter and participants, no coding needed. Pick one of five places, then go part by part:

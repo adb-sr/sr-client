@@ -60,6 +60,8 @@ def pick_place(sr):
     send = W.Button(description="Send to the service", button_style="primary", icon="rocket",
                     layout=W.Layout(width="220px"))
     status = W.HTML()
+    waiting = W.HTML()
+    picture = W.Image(format="png", layout=W.Layout(display="none"))
 
     def describe(_=None):
         own.layout.display = "" if place.value == OWN_PLACE else "none"
@@ -96,8 +98,28 @@ def pick_place(sr):
             S.update(sr=sr, place=place.value, lat=la, lon=lo, date=d, area=area, est=est,
                      job=job)
             ANSWERS["PLACE"] = f"{place.value} ({d})"
-            status.value = _pre("\n".join(lines)) + _note(
-                f"<b>Job sent</b> ({job.id[:8]}, {job.status}). Go on with part 2.", "#1a7f37")
+            sent = _pre("\n".join(lines)) + _note(
+                f"<b>Job sent</b> ({job.id[:8]}).", "#1a7f37")
+            status.value = sent
+            picture.layout.display = "none"
+            try:    # the main Sentinel-2 image: known as soon as the service has chosen it
+                _wait(job, waiting, until_stage="1")
+                waiting.value = _note("Reading the main Sentinel-2 image from the archive ...")
+                tile = middle_tile(manifest(job))
+                _, img, _ = scene_images(tile["scene_ids"][:1], la, lo, km=2)[0]
+                fig, ax = plt.subplots(figsize=(5.6, 5.9))
+                ax.imshow(img, interpolation="nearest")
+                ax.set_title(f"The main Sentinel-2 image of your area ({tile['dates'][0]})\n"
+                             "10 m pixels: this is what the satellite gives you", fontsize=10)
+                ax.axis("off")
+                fig.tight_layout()
+                picture.value = _png(fig)
+                picture.layout.display = ""
+                waiting.value = ""
+            except Exception as exc:    # the picture is an extra: the job itself is sent
+                waiting.value = _note("(The Sentinel-2 image could not be shown: "
+                                      f"{_html.escape(str(exc))})", "#555")
+            status.value = sent + _note("Go on with part 2.", "#1a7f37")
         except ValueError:
             status.value = _note("The date must look like 2026-04-15.", "#b00020")
         except SRError as exc:
@@ -106,8 +128,9 @@ def pick_place(sr):
             send.disabled = False
     send.on_click(on_send)
 
-    ui = W.VBox([place, about, own, send, status])
+    ui = W.VBox([place, about, own, send, status, waiting, picture])
     ui.place, ui.send, ui.status, ui.own_fields = place, send, status, (lat, lon, day)
+    ui.picture = picture
     UI["place"] = ui
     display(ui)
 

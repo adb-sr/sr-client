@@ -156,7 +156,7 @@ def dump(name, image):
 # 1. Run all has finished: the first area is ready-made, its pictures are loaded, part 5 is shut
 assert set(PKG) == {"tondo", "manila_south", "hanoi"}, PKG.keys()
 a, look, c = UI["area"], UI["look"], UI["canvas"]
-assert a.place.value == "tondo" and "pictures are ready" in a.info.value
+assert a.place.value == "tondo" and "images are ready" in a.info.value
 assert len(look.viewer.children) == 3, look.status.value
 assert "cheat" not in UI and "Opens once" in UI["cheat_holder"].children[0].value
 dump("viewer_all", look.viewer.children[0].image)
@@ -171,7 +171,7 @@ for i in range(len(STARTERS)):
     s = STARTERS[i]
     assert ANSWERS["decision"] == s["fields"]["decision"] and ANSWERS["area_km2"] == s["area_km2"]
     assert a.place.value == s["area"] and s["task"] in CHEAT and s["area"] in AREAS
-    assert set(s["fields"]) == {k for k, _, _ in CANVAS} - {"team"}, s["title"]
+    assert set(s["fields"]) == {k for k, *_ in CANVAS} - {"team"}, s["title"]
 c.pick.value = 0
 c.fill.click()
 assert c.fields["team"].value == "Team Test" and a.place.value == "tondo"
@@ -183,14 +183,14 @@ c.size.value = 5
 m = UI["money"]
 assert "620 km²" in S["money"][0], S["money"]
 before = S["money"][1]
-m.controls["SR level"].value = "t500"
+m.controls["SR image"].value = "t500"
 assert m.controls["Super-resolution, USD per km²"].value == SR_USD_KM2["t500"]
 assert S["money"][1] != before
 c.area.value = 10                       # smaller than the smallest order
 assert "smallest order" in m.reading.value
 c.area.value, c.updates.value = 620, 12
-m.controls["One wasted action costs (USD)"].value = 80
-m.controls["Mixed: real images for (%)"].value = 10
+m.controls["One wasted visit costs (USD)"].value = 80
+m.controls["Mix: real images for (%)"].value = 10
 dump("money", m.chart)
 (OUT / "money.html").write_text(m.reading.value)
 
@@ -211,9 +211,15 @@ look.fields["WHY"].value = "single roofs"
 look.fields["INVENTED"].value = "streets in the settlement"
 look.fields["LEVEL"].value = "stage 2 strong"
 ch = UI["cheat"]
-assert ch.task.value == "settlements" and "measurements agree" in ch.sheet.value
+assert ch.task.value == "settlements" and "The measurements agree" in ch.sheet.value
 look.fields["LEVEL"].value = "Sentinel-2"
-assert "more careful image" in ch.sheet.value
+assert "less sharp" in ch.sheet.value
+look.fields["LEVEL"].value = "none: we need real images"
+assert "good enough for you" in ch.sheet.value
+ch.task.value = "damage"
+assert "The measurements agree" in ch.sheet.value
+look.fields["LEVEL"].value = "stage 2 light"
+assert "What makes you trust" in ch.sheet.value
 for k in CHEAT:
     ch.task.value = k
     assert CHEAT[k]["verdict"] in ch.sheet.value
@@ -223,7 +229,7 @@ for k in CHEAT:
     f"<h3>{r['title']}</h3>" for r in CHEAT.values()))
 ch.task.value = "fields"
 look.fields["LEVEL"].value = "stage 2 strong"
-assert "stronger image" in ch.sheet.value
+assert "sharper than" in ch.sheet.value
 (OUT / "cheat.html").write_text(ch.sheet.value)
 ch.fields["TEST_DATA"].value = "200 validated blocks"
 ch.fields["TEST_BASELINE"].boxes[0].value = True
@@ -233,8 +239,8 @@ f = UI["scenario_card"].fields
 f["VERDICT"].value = "test it first"
 f["SAFEGUARDS"].boxes[0].value = True
 text = scenario_card_text()
-for needle in ("Team Test", "Tondo and Baseco", "scenes on", "620 km²", "stage 2 strong",
-               "single roofs", "disagree", "200 validated blocks", BASELINES[0],
+for needle in ("Team Test", "Tondo and Baseco", "images on", "620 km²", "stage 2 strong",
+               "single roofs", "cheat sheet agrees with us: no", "200 validated blocks", BASELINES[0],
                "10 of 20 in two cities", "test it first", SAFEGUARDS[0]):
     assert needle in text, needle
 assert _html.escape("10 of 20 in two cities") in UI["scenario_card"].card.value
@@ -275,7 +281,7 @@ _cl.FINISHED = ("done", "partial", "failed", "cancelled")
 _sys.modules.update({"sr_client": _mod, "sr_client.client": _cl})
 time.sleep = lambda s: None
 a.place.value = "payatas"                 # not in the package
-assert "not in the download" in a.info.value and a.connect.layout.display != "none"
+assert "did not download" in a.info.value and a.connect.layout.display != "none"
 look.load.click()
 assert "Nothing to load yet" in look.status.value
 a.send.click()
@@ -286,7 +292,7 @@ a.connect.key.value, a.connect.url.value = "srk_test", "http://fake"
 a.connect.go.click()
 assert "Connected" in a.connect.status.value, a.connect.status.value
 a.check.click()
-assert "9 scenes on 9 days" in a.status.value, a.status.value
+assert "9 images on 9 days" in a.status.value, a.status.value
 a.send.click()
 assert "Sent." in a.status.value and [t for _, _, t in _SR.sent] == [100, 250, 500]
 assert _SR.sent[0][:2] == (tuple(area_around(14.7130, 121.1000, km=3)), "2026-03-15")
@@ -305,7 +311,7 @@ assert _SR.sent[-1] == (tuple(area_around(10.3, 123.9, km=2)), "2026-02-01", 500
 look.load.click()
 assert len(look.viewer.children) == 3 and "Our own area" in scenario_card_text()
 a.place.value = "hanoi"                   # back to a ready-made area with measured results
-assert "measured results" in a.info.value
+assert "measured results" in a.info.value and "images are ready" in a.info.value
 look.load.click()
 assert set(S["layers"]) == {"s2", "stage1", "t100", "t250", "t500"}
 print("CHECKS PASSED")

@@ -1,12 +1,12 @@
-# ---- "your scenario": the team writes the brief, then judges whether SR fits -------------------
+# ---- "your scenario": the team chooses a decision, then judges whether SR fits ----------------
 # Pasted after hk.py, hk_widgets.py and areas.py by build.py (scenario notebook only).
-# Parts: 1 scenario canvas, 2 area and dates, 3 money, 4 look at the levels, 5 cheat sheet and
-# test plan, 6 slide card. Nothing waits for input; the service is needed only for an own area
-# (or if the ready-made pictures did not download).
+# Parts: 1 scenario, 2 area and dates, 3 cost, 4 compare the images, 5 cheat sheet and test
+# plan, 6 slide card. Nothing waits for input; the service is needed only for an own area (or
+# if the ready-made images did not download).
 
 LEVEL_NAME = {k: n for k, n, _ in LEVELS}
 LEVEL_TAU = {k: t for k, _, t in LEVELS if t}
-PKG = {}          # ready-made areas whose pictures came with the download: slug -> facts
+PKG = {}          # ready-made areas whose images came with the download: slug -> facts
 OWN = "own"
 _COLAB = "https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/hackathon/"
 MEASURED = {
@@ -22,7 +22,7 @@ SR_USD_KM2 = {"stage1": 0.0002, "t100": 0.005, "t250": 0.013, "t500": 0.026}
 
 
 def get_areas(base_url, name="scenario_areas"):
-    """Download the pictures of the ready-made areas once. Without them the notebook still
+    """Download the images of the ready-made areas once. Without them the notebook still
     works: the areas then come from the SR service (part 2)."""
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
     marker = DATA_ROOT / f".{name}.done"
@@ -36,13 +36,13 @@ def get_areas(base_url, name="scenario_areas"):
             tmp.unlink()
             marker.touch()
         except Exception as e:
-            print(f"  (the ready-made pictures did not download: {e}. The notebook works "
-                  "without them: connect to the SR service in part 2.)")
+            print(f"  The ready-made images did not download ({e}). You can still work: "
+                  "connect to the SR service in part 2.")
     PKG.clear()
     meta = DATA_ROOT / name / "meta.json"
     if meta.exists():
         PKG.update({k: v for k, v in json.loads(meta.read_text())["areas"].items() if k in AREAS})
-    print(f"Ready-made areas with pictures: {len(PKG)} of {len(AREAS)}.")
+    print(f"Ready-made areas with images: {len(PKG)} of {len(AREAS)}.")
 
 
 def _pkg_layers(slug, name="scenario_areas"):
@@ -65,24 +65,29 @@ def _said(key):
     return v if v not in ("", None, []) else "(not answered)"
 
 
-# ---- part 1: the scenario canvas ---------------------------------------------------------------
+# ---- part 1: the scenario ----------------------------------------------------------------------
 
+# key, question, example, label on the card
 CANVAS = [
-    ("team", "Team name", "Team A"),
-    ("decision_maker", "Who decides?", "City housing office, settlement upgrading programme"),
+    ("team", "Team name", "Team A", "TEAM"),
+    ("decision_maker", "Who decides?", "City housing office, settlement upgrading programme",
+     "WHO DECIDES"),
     ("decision", "What do they decide, and how often?",
-     "Which blocks get a field validation, every quarter"),
-    ("today", "How do they decide today?", "From a list that is six years old, and complaints"),
-    ("object", "What must the image show?", "Dense small roofs with no streets between them"),
-    ("metric", "How will you measure success?", "Of 20 visits, how many find a settlement"),
+     "Which blocks get a field validation, every quarter", "DECISION"),
+    ("today", "How do they decide today?", "From a six-year-old list and from complaints",
+     "TODAY"),
+    ("object", "What must the image show?", "Dense small roofs with no streets between them",
+     "MUST SHOW"),
+    ("metric", "Which number shows success?", "Of 20 visits, how many find a settlement",
+     "SUCCESS"),
     ("minimum", "The minimum you need, and why",
-     "10 of 20: below that, the teams stop trusting the map"),
+     "10 of 20: below that, the teams stop trusting the map", "MINIMUM"),
     ("below", "What does an error cost, and who pays?",
-     "A wasted team-day; families left off the list for a year"),
+     "A wasted team-day; families left off the list for a year", "ERRORS COST"),
 ]
-UPDATES = [("once a year", 1), ("each season", 2), ("every quarter", 4), ("every month", 12)]
+UPDATES = [("once a year", 1), ("twice a year", 2), ("every quarter", 4), ("every month", 12)]
 
-# Our own scenarios, kept in the back pocket: a team that is stuck can start from one.
+# Our own example scenarios: a team that is stuck can start from one.
 STARTERS = [
     dict(title="Housing office: which blocks do the validation teams visit first?",
          task="settlements", area="tondo", size_m=5, area_km2=620, updates=4, fields=dict(
@@ -139,11 +144,11 @@ STARTERS = [
              object="Groups of trees of 30 m and more",
              metric="Of 20 surveys, how many find dense tree cover",
              minimum="18 of 20: free Sentinel-2 may already reach that",
-             below="A wasted surveyor-day; a grove stays unprotected")),
+             below="A wasted surveyor-day; a group of trees stays unprotected")),
     dict(title="Agriculture office: which villages get the farmer-registry teams?",
          task="fields", area="munoz", size_m=5, area_km2=5000, updates=2, fields=dict(
              decision_maker="Department of agriculture regional office, smallholder programme",
-             decision="Which 30 areas the extension workers visit to enrol farmers, each season",
+             decision="Which 30 areas the extension workers visit to enrol farmers, twice a year",
              today="No map of the fields; the smallest farms are missing from the registry",
              object="Field boundaries: bunds and paths 1 to 3 m wide between small fields",
              metric="Of 30 visits, how many reach an area with many small farms",
@@ -155,7 +160,7 @@ STARTERS = [
              decision="Which 20 square kilometres get a second enumerator, once per census",
              today="A parcel count that is ten years old",
              object="Parcels, to count them per square kilometre",
-             metric="Of 20 squares chosen, how many really have very many parcels",
+             metric="Of 20 squares chosen, how many have very many parcels",
              minimum="15 of 20",
              below="An enumerator sent where one was enough; a square counted late")),
     dict(title="Disaster office: how far did the flood reach?",
@@ -171,15 +176,15 @@ STARTERS = [
          task="landcover", area="rodriguez", size_m=15, area_km2=1200, updates=4, fields=dict(
              decision_maker="Provincial mining regulatory board",
              decision="Which 20 quarry sites get an inspection, every quarter",
-             today="Inspections by rotation, each site about every two years",
-             object="Freshly dug ground next to a permit boundary (changes of 15 m and more)",
+             today="By rotation: each site about every two years",
+             object="Freshly dug ground next to a permit boundary (15 m and more)",
              metric="Of 20 inspections, how many find digging outside the permit area",
              minimum="8 of 20: rotation finds about 3",
              below="A wasted inspector-day; illegal digging continues for a quarter")),
     dict(title="Fisheries office: which fishponds are in use?",
          task="flood", area="hagonoy", size_m=10, area_km2=900, updates=2, fields=dict(
              decision_maker="Provincial fisheries office",
-             decision="Which pond owners get a visit about lease renewal, each season",
+             decision="Which pond owners get a visit about lease renewal, twice a year",
              today="Lease records on paper; no map of which ponds hold water",
              object="Pond dikes (2 to 5 m wide) and whether a pond holds water",
              metric="Of 30 visits, how many ponds are in the state the map showed",
@@ -189,14 +194,14 @@ STARTERS = [
 
 
 def canvas():
-    """Part 1: the team's own scenario. Every field saves itself. 'Stuck?' offers our own
-    scenarios as a starting point; they fill the fields, which stay editable."""
-    form = ask(*[(k, t, "text", ex) for k, t, ex in CANVAS], show=False)
+    """Part 1: the team's own scenario. Every field saves itself. 'Stuck?' offers our example
+    scenarios; one click fills the fields, which stay editable."""
+    form = ask(*[(k, t, "text", ex) for k, t, ex, _ in CANVAS], show=False)
     size = W.BoundedFloatText(value=5, min=0.3, max=500, step=0.5, style=_LABEL,
                               description="Smallest thing you must see (m)")
     area = W.BoundedFloatText(value=600, min=1, max=1e8, step=10, style=_LABEL,
-                              description="Area you must watch (km²)")
-    updates = W.ToggleButtons(options=UPDATES, value=4, description="A fresh map",
+                              description="Area to cover (km²)")
+    updates = W.ToggleButtons(options=UPDATES, value=4, description="New map needed",
                               style=_buttons("110px"))
     hint = W.HTML()
 
@@ -211,7 +216,7 @@ def canvas():
     pick = W.Dropdown(options=[("(choose one)", -1)] + [(s["title"], i)
                                                         for i, s in enumerate(STARTERS)],
                       value=-1, layout=W.Layout(width="720px"))
-    fill = W.Button(description="Fill the canvas with it", icon="clipboard",
+    fill = W.Button(description="Use this example", icon="clipboard",
                     layout=W.Layout(width="260px"))
     told = W.HTML()
 
@@ -230,15 +235,15 @@ def canvas():
                     getattr(UI[name], key).value = s["area" if name == "area" else "task"]
                 except Exception:
                     pass
-        told.value = _note("Filled. Now change every field until it describes a decision in "
-                           "<b>your</b> agency. Part 2 suggests an area for it.", "#1a7f37")
+        told.value = _note("Done. Now change the fields to fit <b>your</b> agency. Part 2 has "
+                           "chosen a matching area.", "#1a7f37")
     fill.on_click(on_fill)
     stuck = W.Accordion(children=[W.VBox([
-        W.HTML(_note("Scenarios we prepared. The kind of decision is real; the offices and "
-                     "the numbers are invented.")), pick, fill, told])])
-    stuck.set_title(0, "Stuck? Start from one of ours")
+        W.HTML(_note("Example scenarios. The decisions are realistic; the offices and the "
+                     "numbers are invented.")), pick, fill, told])])
+    stuck.set_title(0, "Stuck? Start from an example")
     stuck.selected_index = None
-    ui = W.VBox([form, W.HTML("<b>Three numbers the later parts use</b>"), size, hint, area,
+    ui = W.VBox([form, W.HTML("<b>Three numbers for the next parts</b>"), size, hint, area,
                  updates, stuck])
     ui.fields, ui.size, ui.area, ui.updates = form.fields, size, area, updates
     ui.pick, ui.fill = pick, fill
@@ -249,48 +254,45 @@ def canvas():
 
 def _size_rule(m):
     if m < 2.5:
-        return (f"{m:g} m is smaller than one SR pixel (2.5 m). SR cannot show it: what it draws "
-                "at that size is invented. Plan for real high-resolution images.")
+        return (f"{m:g} m is smaller than an SR pixel (2.5 m). SR cannot show it; anything it "
+                "draws at that size is invented. You need real high-resolution images.")
     if m < 10:
-        return (f"{m:g} m lies between the SR pixel (2.5 m) and the Sentinel-2 pixel (10 m). "
-                "This is where SR can help, and where it can invent. Test before you trust.")
+        return (f"{m:g} m is between an SR pixel (2.5 m) and a Sentinel-2 pixel (10 m). SR can "
+                "help here, and it can also invent. Test it.")
     if m < 20:
-        return (f"{m:g} m is one to two Sentinel-2 pixels. SR may sharpen it; try plain "
-                "Sentinel-2 first.")
+        return (f"{m:g} m is one to two Sentinel-2 pixels. Try Sentinel-2 first; SR may "
+                "sharpen it.")
     return f"{m:g} m is several Sentinel-2 pixels. Free Sentinel-2 probably shows it already."
 
 
 def canvas_dict():
-    return {k: (ANSWERS.get(k) or "").strip() or "(not answered)" for k, _, _ in CANVAS}
+    return {k: (ANSWERS.get(k) or "").strip() or "(not answered)" for k, *_ in CANVAS}
 
 
 # ---- part 2: area and dates --------------------------------------------------------------------
 
 def _scene_html(info):
-    """Scenes found, tiles, cost and warnings, from the service's estimate or the package."""
+    """Sentinel-2 images found, cost and warnings, from the service's estimate or the package."""
     scenes = info.get("scenes") or []
     dates = sorted({s["date"] for s in scenes})
-    rows = [f"<b>Sentinel-2 images found:</b> {len(scenes)} scenes on {len(dates)} days"
+    rows = [f"<b>Sentinel-2 images found:</b> {len(scenes)} images on {len(dates)} days"
             + (f", {dates[0]} to {dates[-1]}" if dates else "")]
     clouds = [s["cloud_cover"] for s in scenes if s.get("cloud_cover") is not None]
     if clouds:
-        rows.append(f"<b>Cloud cover of those scenes:</b> {min(clouds):.0f} % to "
-                    f"{max(clouds):.0f} % (median {float(np.median(clouds)):.0f} %)")
+        rows.append(f"<b>Cloud cover:</b> {min(clouds):.0f} % to {max(clouds):.0f} %")
     if len(dates) < 4:
-        rows.append("<span style='color:#b00020'><b>Fewer than 4 clear days.</b> Stage 1 "
-                    "blends several images; with so few it has little to work with. Try "
-                    "another date, ideally in the dry season.</span>")
-    if info.get("tiles"):
-        rows.append(f"<b>Work for the service:</b> {info['tiles']} tiles")
+        rows.append("<span style='color:#b00020'><b>Fewer than 4 days with images.</b> "
+                    "Super-resolution needs several. Try another date, ideally in the dry "
+                    "season.</span>")
     usd = info.get("usd") or {}
     if usd:
-        rows.append("<b>Computing cost of this area:</b> " + ", ".join(
+        rows.append("<b>Computing cost for this area:</b> " + ", ".join(
             f"{LEVEL_NAME[k].replace('SR ', '')} USD {v:.2f}" for k, v in usd.items()))
     codes = [w if isinstance(w, str) else w.get("code", "?")
              for w in info.get("warnings") or []]
     if codes:
         rows.append("<b>Warnings:</b> " + ", ".join(codes)
-                    + ("  (water: SR erases detail in shallow water; use Sentinel-2 there)"
+                    + ("  (SR removes detail in shallow water; use Sentinel-2 there)"
                        if "water" in codes else ""))
     for p in info.get("problems") or []:
         rows.append(f"<span style='color:#b00020'><b>Problem:</b> {_html.escape(str(p))}</span>")
@@ -336,12 +338,12 @@ def _connect_box(on_connected):
 
 
 def area_panel():
-    """Part 2: choose a ready-made area (pictures come with the notebook) or a place of your
-    own (the SR service makes the pictures; send before lunch). Shows which Sentinel-2 images
-    exist and what the computing costs."""
+    """Part 2: choose a ready-made area (its images come with the notebook) or your own area
+    (the SR service makes the images; send before lunch). Shows which Sentinel-2 images exist
+    and what the computing costs."""
     themed = [(f"{a['theme']}  ·  {a['name']}" + ("  ★" if a.get("measured") else ""), slug)
               for slug, a in AREAS.items()]
-    place = W.Dropdown(options=themed + [("A place of our own (needs the SR service)", OWN)],
+    place = W.Dropdown(options=themed + [("Our own area (needs the API key)", OWN)],
                        value=themed[0][1], description="Area", layout=W.Layout(width="760px"),
                        style={"description_width": "60px"})
     info = W.HTML()
@@ -351,13 +353,13 @@ def area_panel():
                             style=_LABEL)
     day = W.Text(value="2026-03-15", description="Date (YYYY-MM-DD)", style=_LABEL)
     own = W.VBox([W.HTML(_note(
-        "A point (in Google Maps: right-click, then click the coordinates to copy them), a "
-        "size and a date. Clear skies matter: pick the dry season. A new area takes about "
-        "5 to 10 minutes for all three levels, so <b>send it before lunch</b>.")),
+        "Enter a point, a size and a date. In Google Maps, right-click the place and click "
+        "the coordinates to copy them. Pick a date in the dry season. The service takes 5 to "
+        "10 minutes, so <b>send before lunch</b>.")),
         lat, lon, km, day])
     check = W.Button(description="Check Sentinel-2 images (free)", icon="search",
                      layout=W.Layout(width="300px"))
-    send = W.Button(description="Send at three levels", icon="rocket", button_style="primary",
+    send = W.Button(description="Send to the SR service", icon="rocket", button_style="primary",
                     layout=W.Layout(width="300px"))
     status = W.HTML()
 
@@ -381,19 +383,18 @@ def area_panel():
                      f"images around {a['date']}."]
             if a.get("measured"):
                 t, link = MEASURED[a["measured"]]
-                lines.append(f"★ Experts labelled this place: measured results are in the "
-                             f"notebook <a href='{link}' target='_blank'>{t}</a>.")
+                lines.append("★ Experts mapped this place, so we have measured results for it: "
+                             f"see the notebook <a href='{link}' target='_blank'>{t}</a>.")
             if ready:
                 S["scene_info"] = PKG[a["slug"]]
                 lines += [_scene_html(PKG[a["slug"]]),
-                          "<span style='color:#1a7f37'><b>The pictures are ready</b>: go on "
-                          "to part 3. No key needed.</span>"]
+                          "<span style='color:#1a7f37'><b>The images are ready.</b> No key "
+                          "needed. Go on to part 3.</span>"]
             else:
                 S.pop("scene_info", None)
-                lines.append("<span style='color:#8a6d00'>The pictures of this area are not in "
-                             "the download. Connect to the SR service below and press "
-                             "<b>Send</b>: areas we ran before the workshop come back "
-                             "at once.</span>")
+                lines.append("<span style='color:#8a6d00'>The images for this area did not "
+                             "download. Connect to the SR service below and press "
+                             "<b>Send</b>.</span>")
             info.value = _card("<br>".join(lines))
         service.layout.display = "none" if ready else ""
         for redraw in list(ANSWER_REFRESH.values()):
@@ -418,7 +419,7 @@ def area_panel():
             for k, tau in LEVEL_TAU.items():
                 est = sr.estimate(box, a["date"], tau=tau)
                 out["usd"][k] = est.get("estimated_usd", 0)
-                out.update({f: est.get(f) for f in ("scenes", "tiles", "problems")})
+                out.update({f: est.get(f) for f in ("scenes", "problems")})
                 out["warnings"] = est.get("warnings_likely", [])
             S["scene_info"] = out
             status.value = _card(_scene_html(out))
@@ -442,13 +443,11 @@ def area_panel():
                 jobs[k] = sr.submit(box, a["date"], tau=tau)
             S["jobs"], S["jobs_area"] = jobs, a
             status.value = _card(
-                "<b>Sent.</b> " + ", ".join(f"{LEVEL_NAME[k]}: job {j.id[:8]} ({j.status})"
-                                            for k, j in jobs.items())
-                + "<br>The service works while you are away. After lunch, press <b>Load the "
-                  "pictures</b> in part 4.<br><span style='color:#777'>If this notebook "
-                  "restarts over lunch: choose the same area and date and press Send again. "
-                  "A request the service has already computed comes back at once and costs "
-                  "nothing.</span>", "#1a7f37")
+                "<b>Sent.</b> The service is working. After lunch, press <b>Load the "
+                "images</b> in part 4.<br>If the notebook restarts: enter the same area and "
+                "date and press Send again. The result comes back at once, at no cost."
+                "<br><span style='color:#777'>Jobs: "
+                + ", ".join(f"{k} {j.id[:8]}" for k, j in jobs.items()) + "</span>", "#1a7f37")
         except Exception as exc:
             status.value = _note(f"The service said: {_html.escape(str(exc))}", "#b00020")
         finally:
@@ -461,8 +460,8 @@ def area_panel():
         c.observe(refresh, names="value")
     check.on_click(on_check)
     send.on_click(on_send)
-    ui = W.VBox([place, W.HTML(_note("★ = a place where experts labelled what is on the "
-                                     "ground, so results were measured.", "#777")),
+    ui = W.VBox([place, W.HTML(_note("★ = experts mapped this place, so we have measured "
+                                     "results for it.", "#777")),
                  info, service])
     ui.place, ui.info, ui.connect, ui.check, ui.send, ui.status = (place, info, connect, check,
                                                                    send, status)
@@ -472,24 +471,23 @@ def area_panel():
     display(ui)
 
 
-# ---- part 3: money -----------------------------------------------------------------------------
+# ---- part 3: cost ------------------------------------------------------------------------------
 
 def money_panel():
-    """Part 3: the imagery bill for the whole area, per kind of image, and what real images
+    """Part 3: the image cost for the whole area, per kind of image, and what real images
     would have to save to be worth their price."""
-    c = UI.get("canvas")
     price_hr = W.BoundedFloatText(value=10, min=0, max=1000, step=1, style=_LABEL,
                                   description="Real images, USD per km²")
     min_order = W.BoundedFloatText(value=25, min=0, max=10000, step=25, style=_LABEL,
                                    description="Smallest order (km²)")
     level = W.ToggleButtons(options=[(LEVEL_NAME[k].replace("SR ", ""), k) for k in SR_USD_KM2],
-                            value="t250", description="SR level", style=_buttons("150px"))
+                            value="t250", description="SR image", style=_buttons("150px"))
     price_sr = W.BoundedFloatText(value=SR_USD_KM2["t250"], min=0, max=100, step=0.001,
                                   style=_LABEL, description="Super-resolution, USD per km²")
     share = W.IntSlider(value=5, min=1, max=50, continuous_update=False, layout=_WIDE,
-                        style=_LABEL, description="Mixed: real images for (%)")
+                        style=_LABEL, description="Mix: real images for (%)")
     wasted = W.BoundedFloatText(value=150, min=1, max=1e6, step=10, style=_LABEL,
-                                description="One wasted action costs (USD)")
+                                description="One wasted visit costs (USD)")
     chart = W.Image(format="png", layout=W.Layout(max_width="100%"))
     reading, status = W.HTML(), W.HTML()
 
@@ -507,9 +505,9 @@ def money_panel():
             real = max(area, min_order.value) * price_hr.value * n
             part = max(area * share.value / 100, min_order.value) * price_hr.value * n
             mixed = sr + part
-            name = LEVEL_NAME[level.value].replace(" (careful)", "")
+            name = LEVEL_NAME[level.value]
             rows = [("Sentinel-2 only", 0.0, COLOURS["s2"]), (name, sr, COLOURS["stage2"]),
-                    (f"{name} everywhere,\nreal images for {share.value} %", mixed, "#f2a900"),
+                    (f"{name} + real images\nfor {share.value} % of the area", mixed, "#f2a900"),
                     ("Real images everywhere", real, COLOURS["hr"])]
             fig, ax = plt.subplots(figsize=(8.6, 2.9))
             top = max(real, mixed, sr, 1)
@@ -522,7 +520,7 @@ def money_panel():
             ax.invert_yaxis()
             ax.set_xlim(0, top * 1.2)
             ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{v:,.0f}"))
-            ax.set_xlabel(f"imagery bill per year (USD) for {area:,.0f} km², {every}")
+            ax.set_xlabel(f"image cost per year (USD): {area:,.0f} km², {every}")
             chart.value = _png(fig)
             gap = real - sr
             visits = gap / wasted.value
@@ -531,33 +529,32 @@ def money_panel():
                 f"images about <b>USD {real:,.0f}</b>"
                 + (f" (the smallest order, {min_order.value:,.0f} km², is larger than your "
                    "area)" if min_order.value > area else "") + ".",
-                f"<b>What must real images save?</b> They cost USD {gap:,.0f} a year more than "
-                f"{name}. At USD {wasted.value:,.0f} per wasted action, that is the price of "
-                f"<b>{visits:,.0f} wasted actions a year</b> ({visits / n:,.0f} per update). "
-                "Real images are worth it only if they avoid more than that.",
-                f"<b>A mixed strategy:</b> {name} everywhere to choose where to look, real "
-                f"images for {share.value} % of the area: about <b>USD {mixed:,.0f}</b> a year.",
+                f"<b>What must real images save?</b> They cost USD {gap:,.0f} more per year "
+                f"than {name}. That equals <b>{visits:,.0f} wasted visits a year</b> at USD "
+                f"{wasted.value:,.0f} each ({visits / n:,.0f} per map). Real images pay off "
+                "only if they prevent more than that.",
+                f"<b>The mix:</b> {name} for the whole area, real images for {share.value} % "
+                f"of it: about <b>USD {mixed:,.0f}</b> a year.",
             ]
             info = S.get("scene_info") or {}
             a = S.get("area") or {}
             if info.get("usd") and a.get("km"):
                 lines.append("<span style='color:#777'>Your area in part 2 "
                              f"({a['km'] ** 2:g} km²) costs USD "
-                             f"{info['usd'].get(level.value, 0):.2f} at this level. Small jobs "
-                             "cost more per km² than large ones: each job starts a computer."
-                             "</span>")
-            lines.append("<span style='color:#777'>Starting prices: real images about USD 4–19 "
-                         "per km² at list price (Sessions 1 and 3), often with a smallest "
-                         "order of 25–100 km²; super-resolution is the computing cost of the "
-                         "service (Session 4). People, field checks and storage are extra for "
-                         "every option. Change the numbers to yours.</span>")
+                             f"{info['usd'].get(level.value, 0):.2f} to compute. Small areas "
+                             "cost more per km² than large ones.</span>")
+            lines.append("<span style='color:#777'>Default prices: real images USD 4–19 per "
+                         "km² at list price, often with a smallest order of 25–100 km² "
+                         "(Sessions 1 and 3). Super-resolution: computing cost only "
+                         "(Session 4). Staff, field checks and storage are extra for every "
+                         "option. Change the numbers to yours.</span>")
             reading.value = _card("".join(f"<p style='margin:6px 0'>{x}</p>" for x in lines))
             S["money"] = [f"{area:,.0f} km², {every}",
                           f"Sentinel-2 free; {name} USD {sr:,.0f}; real images USD {real:,.0f} "
                           "a year",
-                          f"real images must avoid {visits:,.0f} wasted actions a year "
-                          f"(USD {wasted.value:,.0f} each) to pay off",
-                          f"mixed ({name} + real images for {share.value} %): USD {mixed:,.0f} "
+                          f"real images pay off only if they prevent more than {visits:,.0f} "
+                          f"wasted visits a year (USD {wasted.value:,.0f} each)",
+                          f"mix ({name} + real images for {share.value} %): USD {mixed:,.0f} "
                           "a year"]
             if "scenario_card" in ANSWER_REFRESH:
                 ANSWER_REFRESH["scenario_card"]()
@@ -574,7 +571,7 @@ def money_panel():
             seen["now"] = now
             draw()
     ANSWER_REFRESH["money"] = on_answer
-    numbers = W.HTML(_note("The area and how often you need a fresh map come from part 1.",
+    numbers = W.HTML(_note("The area and how often you need a new map come from part 1.",
                            "#777"))
     ui = W.VBox([numbers, price_hr, min_order, level, price_sr, share, wasted, status, chart,
                  reading])
@@ -585,11 +582,11 @@ def money_panel():
     display(ui)
 
 
-# ---- part 4: look at the levels ----------------------------------------------------------------
+# ---- part 4: compare the images ----------------------------------------------------------------
 
 def _job_layers(jobs):
-    """Finished jobs (level -> job) to display layers. Sentinel-2 and stage 1 come from the
-    first job; stage 2 from each."""
+    """Finished jobs (image key -> job) to display layers. Sentinel-2 and stage 1 come from
+    the first job; stage 2 from each."""
     raw = {}
 
     def rgb(job, name):
@@ -608,7 +605,7 @@ def _job_layers(jobs):
 
 
 def _compare_viewer(layers, px=2.5):
-    """The levels side by side (or two of them, large), with zoom and position sliders."""
+    """The images side by side (or two of them, large), with zoom and position sliders."""
     keys = [k for k, _, _ in LEVELS if k in layers]
     ref = max(keys, key=lambda k: layers[k].shape[0])
     h, w = layers[ref].shape[:2]
@@ -673,14 +670,14 @@ def _compare_viewer(layers, px=2.5):
 
 
 LEVEL_CHOICES = ["Sentinel-2", "SR stage 1", "stage 2 light", "stage 2 standard",
-                 "stage 2 strong", "none of them: real images"]
+                 "stage 2 strong", "none: we need real images"]
 _CHOICE_KEY = dict(zip(LEVEL_CHOICES, ["s2", "stage1", "t100", "t250", "t500", "hr"]))
 
 
 def look_panel():
-    """Part 4: load the pictures of your area (ready-made: at once; your own: from the SR
-    service), compare the levels and commit to the one you would use."""
-    load = W.Button(description="Load the pictures", icon="image", button_style="primary",
+    """Part 4: load the images of your area (ready-made: at once; your own: from the SR
+    service), compare them and choose the one you would use."""
+    load = W.Button(description="Load the images", icon="image", button_style="primary",
                     layout=W.Layout(width="260px"))
     status = W.HTML()
     viewer = W.VBox([])
@@ -694,7 +691,7 @@ def look_panel():
             a = S.get("area") or {}
             if a.get("slug") in PKG:
                 layers = _pkg_layers(a["slug"])
-                status.value = _note(f"{a['name']}: ready-made pictures.", "#1a7f37")
+                status.value = _note(f"{a['name']}: ready-made images.", "#1a7f37")
             elif S.get("jobs"):
                 from sr_client.client import FINISHED
                 jobs, t0 = S["jobs"], time.monotonic()
@@ -713,8 +710,9 @@ def look_panel():
                          for k, j in jobs.items()]
                 status.value = _pre("\n".join(lines))
                 if not good:
-                    status.value += _note("No level finished. Check the date in part 2 (are "
-                                          "there Sentinel-2 images?) and send again.", "#b00020")
+                    status.value += _note("No image was made. In part 2, check that Sentinel-2 "
+                                          "images exist for your date, then send again.",
+                                          "#b00020")
                     return
                 layers = _job_layers(good)
                 info = S.setdefault("scene_info", {})
@@ -739,16 +737,16 @@ def look_panel():
         except Exception:  # not in Colab
             note.value = _note("Saved as my_comparison.png next to this notebook.", "#1a7f37")
     save.on_click(on_save)
-    form = ask(("SEE_S2", "On plain Sentinel-2, can you see what you need?",
-                ["yes", "partly", "no"]),
-               ("LEVEL", "Which image would you use for this task?", LEVEL_CHOICES),
+    form = ask(("SEE_S2", "Can you see what you need on Sentinel-2?", ["yes", "partly", "no"]),
+               ("LEVEL", "Which image would you use?", LEVEL_CHOICES),
                ("WHY", "What does it show that you need?", "text",
                 "the edges of single roofs; Sentinel-2 shows only a grey patch"),
-               ("INVENTED", "Anything that looks invented or wrong? Where?", "text",
+               ("INVENTED", "Does anything look invented or wrong? Where?", "text",
                 "strong draws streets in the settlement that stage 1 does not show"),
                show=False)
     ui = W.VBox([load, status, viewer,
-                 W.HTML("<br><b>Your judgement</b> (decide before you open part 5)"), form])
+                 W.HTML("<br><b>Your choice</b> (part 5 opens after you choose an image)"),
+                 form])
     ui.load, ui.status, ui.viewer, ui.fields = load, status, viewer, form.fields
     UI["look"] = ui
     display(ui)
@@ -758,134 +756,133 @@ def look_panel():
 
 # ---- part 5: cheat sheet and test plan ---------------------------------------------------------
 
-# What we measured, by kind of task. best: the levels that measured best (within noise).
+# What we measured, by kind of task. best: the images that measured best (within noise).
 CHEAT = {
     "settlements": dict(
-        title="Finding where something is concentrated (informal settlements, dense housing)",
+        title="Finding informal settlements or dense housing",
         verdict="A fit for choosing where to look. Not for mapping or counting.",
         best=("t250", "t500"), best_text="SR stage 2, standard",
-        lines=["Metro Manila, six models that never saw an SR image. Map score (F1): "
-               "Sentinel-2 8 %, stage 1 18 %, stage 2 standard 22 %, real images 40 %.",
-               "By level: light 15 %, standard 22 %, strong 24 %. Standard and strong are the "
-               "same within noise; light is no better than stage 1.",
-               "Of 20 field visits, hits: Sentinel-2 6, stage 1 9, stage 2 standard 9, real "
-               "images 13. With Sentinel-2 the result depends on the model you happen to have "
-               "(1 to 11 hits); with SR far less."],
+        lines=["Metro Manila, six models trained on real images. Map score (F1): Sentinel-2 "
+               "8 %, stage 1 18 %, stage 2 standard 22 %, real images 40 %.",
+               "By strength: light 15 %, standard 22 %, strong 24 %. Standard and strong do "
+               "not differ reliably; light is no better than stage 1.",
+               "Of 20 field visits, how many found a settlement: Sentinel-2 6, stage 1 9, "
+               "stage 2 standard 9, real images 13. With Sentinel-2 the result varied a lot "
+               "between models (1 to 11); with SR much less."],
         watch="False alarms on dense formal housing, markets and warehouses. Real images are "
               "still clearly better.",
         notebook="ifs"),
     "buildings": dict(
         title="Mapping or counting buildings",
-        verdict="It helps, but stays far from real images. The best level depends on the "
-                "model you reuse.",
+        verdict="SR helps, but real images are much better. The best image depends on your "
+                "model.",
         best=("stage1", "t100", "t250"),
         best_text="stage 1 for outlines; stage 2 standard with a model trained on sharp images",
-        lines=["Building outlines (SpaceNet 7; a model trained on 4.7 m satellite images): F1 "
-               "0.21 on Sentinel-2, 0.27 stage 1, 0.25 stage 2 standard, 0.62 on the real "
-               "images. Each stronger level scored lower.",
-               "Finding buildings in disaster areas (xBD; a model trained on 0.5 m images): F1 "
-               "0.31 on Sentinel-2, 0.48 stage 1, 0.54 standard (light and strong 0.53), 0.79 "
-               "on real images.",
-               "Houses on farmland around Hanoi, of 15 site checks: Sentinel-2 1, stage 1 5, "
-               "stage 2 5, real images 8."],
-        watch="On the outline test the models found only about one building pixel in five. "
-              "Do not count buildings with SR. Stage 2 draws plausible roofs.",
+        lines=["Building outlines (SpaceNet 7, a model trained on 4.7 m images). F1: "
+               "Sentinel-2 0.21, stage 1 0.27, stage 2 standard 0.25, real images 0.62. The "
+               "stronger the stage 2, the lower the score.",
+               "Finding buildings in disaster areas (xBD, a model trained on 0.5 m images). "
+               "F1: Sentinel-2 0.31, stage 1 0.48, stage 2 light 0.53, standard 0.54, strong "
+               "0.53, real images 0.79.",
+               "Houses on farmland near Hanoi. Of 15 site checks, how many found one: "
+               "Sentinel-2 1, stage 1 5, stage 2 5, real images 8."],
+        watch="In the outline test, SR found only about one fifth of the building area. Do "
+              "not count buildings with SR. Stage 2 can draw roofs that look real.",
         notebook="lc"),
     "damage": dict(
         title="Damage to buildings after a disaster",
-        verdict="Not a fit for grading damage.",
-        best=("hr",), best_text="none of the SR levels: real images",
-        lines=["xBD, five disasters. F1 for damaged buildings: 0.21 on Sentinel-2, 0.21 with "
-               "stage 2 standard, 0.36 on real images. No gain from SR.",
+        verdict="Not a fit for judging damage.",
+        best=("hr",), best_text="none of the SR images: real images",
+        lines=["xBD, five disasters. F1 for damaged buildings: Sentinel-2 0.21, stage 2 "
+               "standard 0.21, real images 0.36. SR adds nothing.",
                "SR does help to find where the buildings are (see \"Mapping or counting "
                "buildings\")."],
-        watch="Damage to a single roof is smaller than the SR pixel. A convincing picture is "
-              "not evidence.",
+        watch="Damage to one roof is smaller than an SR pixel. An image that looks convincing "
+              "is not evidence.",
         notebook=None),
     "landcover": dict(
-        title="Land cover classes (built-up, trees, crops, bare soil, water)",
-        verdict="A fit for small or mixed classes. Large uniform classes do not need SR.",
+        title="Land cover (built-up, trees, crops, bare soil, water)",
+        verdict="A fit for small or mixed features. Large uniform areas do not need SR.",
         best=("t100", "t250"), best_text="SR stage 2, light or standard (light is cheaper)",
-        lines=["Around Hanoi, seven classes. Map score (mean IoU): Sentinel-2 0.32, stage 1 "
+        lines=["Near Hanoi, seven classes. Map score (mean IoU): Sentinel-2 0.32, stage 1 "
                "0.38, stage 2 standard 0.47, real images 0.57.",
-               "By level, on the test tiles: light 0.54, standard 0.53, strong 0.52. The same "
-               "within noise.",
-               "The decision can differ from the map score. Bare soil, of 20 inspections: "
-               "Sentinel-2 12, stage 1 13, stage 2 16, real 17. Trees, of 20: Sentinel-2 18, "
-               "real 19: free images are enough."],
-        watch="Bright industrial roofs and river sandbanks get flagged as bare soil.",
+               "By strength (test tiles only): light 0.54, standard 0.53, strong 0.52. No "
+               "reliable difference.",
+               "The map score does not settle the decision. Bare soil, hits in 20 "
+               "inspections: Sentinel-2 12, stage 1 13, stage 2 16, real images 17. Trees, "
+               "hits in 20 surveys: Sentinel-2 18, real images 19. For trees, free images "
+               "are enough."],
+        watch="Bright factory roofs and river sandbanks are mistaken for bare soil.",
         notebook="lc"),
     "roads": dict(
         title="Roads and tracks",
         verdict="A fit for finding where roads are. Check narrow roads on a real image.",
         best=("t250",), best_text="SR stage 2, standard",
-        lines=["Around Hanoi, of 40 map cells chosen for the most road: Sentinel-2 19, stage 1 "
-               "24, stage 2 standard 30, real images 33.",
-               "Map score for the road class (IoU): Sentinel-2 0.20, stage 1 0.30, stage 2 "
-               "standard 0.34, real images 0.50. Good enough to choose cells, not to draw "
-               "the line."],
-        watch="Roads under trees stay hidden in any satellite image. Stage 2 can join or "
-              "break a road.",
+        lines=["Near Hanoi: choosing the 40 map cells with the most road. Correct choices: "
+               "Sentinel-2 19, stage 1 24, stage 2 standard 30, real images 33.",
+               "Map score for roads (IoU): Sentinel-2 0.20, stage 1 0.30, stage 2 standard "
+               "0.34, real images 0.50. Good enough to choose cells, not to draw the roads."],
+        watch="No satellite image shows roads under trees. Stage 2 can join or break a road.",
         notebook="lc"),
     "fields": dict(
         title="Field boundaries, small farms, parcels",
-        verdict="A fit, with stage 1. Stage 2 adds texture that costs accuracy.",
+        verdict="A fit, with stage 1. Stage 2 adds detail that lowers accuracy.",
         best=("stage1",), best_text="SR stage 1",
-        lines=["Viet Nam and Cambodia, models trained on each kind of image. Field F1: "
+        lines=["Viet Nam and Cambodia, one model trained on each kind of image. Field F1: "
                "Sentinel-2 0.42, stage 1 0.46, light 0.45, standard 0.44, strong 0.44.",
-               "Of 30 visits to find small farms: Sentinel-2 13, stage 1 24, stage 2 standard "
-               "22. Counting all parcels in 1 km squares, of 20: Sentinel-2 16, stage 1 19: "
-               "nearly the same."],
-        watch="A hazy area got no visits at all with Sentinel-2. A model needs labels from "
-              "your own country.",
+               "Finding small farms, hits in 30 visits: Sentinel-2 13, stage 1 24, stage 2 "
+               "standard 22. Counting parcels per square kilometre, hits in 20: Sentinel-2 "
+               "16, stage 1 19. Here Sentinel-2 is nearly as good."],
+        watch="With Sentinel-2, one hazy area got no visits at all. A model needs training "
+              "data from your own country.",
         notebook="ai4"),
     "flood": dict(
         title="Water: floods, ponds, shorelines",
         verdict="Not a fit. Free Sentinel-2 does as well.",
-        best=("s2",), best_text="plain Sentinel-2",
-        lines=["Flood water (FloodPlanet benchmark), map score (mean IoU): Sentinel-2 0.62; SR "
-               "at every level 0.61 to 0.62. No gain.",
-               "The SR service warns about water: super-resolution erases detail in shallow "
+        best=("s2",), best_text="Sentinel-2",
+        lines=["Flood water (FloodPlanet). Map score (mean IoU): Sentinel-2 0.62; every SR "
+               "image 0.61 to 0.62. SR adds nothing.",
+               "SR removes detail in shallow water. The service warns you when an area has "
                "water."],
-        watch="For floods the date matters more than the detail: you need a clear image on "
-              "the right day, and clouds often prevent it.",
+        watch="For floods, the date matters more than the detail. You need a clear image on "
+              "the right day, and clouds often prevent that.",
         notebook=None),
     "change": dict(
         title="Change between two dates (new buildings, new clearing)",
-        verdict="Not measured. Be careful: test first.",
-        best=("stage1", "s2"), best_text="stage 1 (our reasoning, not a measurement)",
+        verdict="Not measured. Test first.",
+        best=("stage1", "s2"), best_text="stage 1 (our judgement, not measured)",
         lines=["We have not measured change detection.",
-               "Stage 2 draws its detail anew on every date, so two stage 2 images can differ "
-               "where the ground did not change. Stage 1 invents nothing."],
-        watch="Compare stage 1 with stage 1, or Sentinel-2 with Sentinel-2; confirm a change "
-              "on a real image or on the ground.",
+               "Stage 2 adds new detail on every date. Two stage 2 images can differ where "
+               "nothing changed on the ground. Stage 1 invents nothing."],
+        watch="Compare like with like: stage 1 with stage 1. Confirm any change on a real "
+              "image or on the ground.",
         notebook=None),
     "small": dict(
         title="Small objects: cars, boats, single trees, roof material",
-        verdict="Not a fit. These are smaller than the SR pixel (2.5 m).",
+        verdict="Not a fit. These are smaller than an SR pixel (2.5 m).",
         best=("hr",), best_text="real high-resolution images",
-        lines=["SR cannot recover what Sentinel-2 did not record. At this size, what stage 2 "
-               "shows is invented.",
+        lines=["SR cannot show what Sentinel-2 did not record. At this size, stage 2 invents.",
                "SR can still tell you where to buy real images."],
-        watch="A convincing picture is not evidence.",
+        watch="An image that looks convincing is not evidence.",
         notebook=None),
     "other": dict(
         title="Something else",
         verdict="Not measured. Use the rules of thumb below and plan a test.",
         best=(), best_text="unknown: test it",
-        lines=["Find the measured task that is closest to yours and read its line too."],
+        lines=["Also read the measured task closest to yours."],
         watch="",
         notebook=None),
 }
 RULES = [
     "<b>Size.</b> 10 m and more: try free Sentinel-2 first. 2.5 to 10 m: SR may help, test it. "
     "Under 2.5 m: real images.",
-    "<b>Sharper is not more accurate.</b> Strong stage 2 looks best and never measured best "
-    "by a clear margin.",
-    "<b>Outlines or texture?</b> Tasks that need outlines (fields, single buildings) did best "
-    "with stage 1. Tasks that need texture (settlements, land cover) did best with stage 2.",
-    "<b>A screening layer.</b> Use SR to decide where to look; confirm on a real image or on "
-    "the ground before anyone acts.",
+    "<b>Sharper is not more accurate.</b> Strong stage 2 looks best, but it never clearly "
+    "measured best.",
+    "<b>Edges or surfaces?</b> Tasks that need exact edges (fields, building outlines) did "
+    "best with stage 1. Tasks that need to tell surfaces apart (settlements, land cover) did "
+    "best with stage 2.",
+    "<b>Use SR to decide where to look.</b> Confirm on a real image or on the ground before "
+    "anyone acts.",
     "<b>The model matters as much as the image.</b> The same image gave different results "
     "with different models.",
 ]
@@ -896,33 +893,35 @@ def _agreement(choice, row):
     if not key or not row["best"]:
         return ""
     if key in row["best"]:
-        return (f"<b>You chose {choice}: the measurements agree.</b> How would you show that "
-                "it also holds in your country?")
-    order = ["s2", "stage1", "t100", "t250", "t500", "hr"]
+        return (f"<b>You chose {choice}. The measurements agree.</b> How would you show that "
+                "this also holds in your country?")
+    head = f"<b>You chose {choice}. Measured best: {row['best_text']}.</b> "
+    if key == "hr":
+        return head + "Which test would show whether SR is good enough for you?"
+    if row["best"] == ("hr",):
+        return head + "What makes you trust the SR image?"
+    order = ["s2", "stage1", "t100", "t250", "t500"]
     best = [order.index(b) for b in row["best"]]
     if order.index(key) > max(best):
-        how = ("you chose a stronger image than the one that measured best. Does the extra "
-               "detail hold up, or does it only look better?")
-    elif order.index(key) < min(best):
-        how = ("you chose a more careful image than the one that measured best. What did "
-               "you distrust?")
-    else:
-        how = "you chose a different image from the one that measured best."
-    return (f"<b>You chose {choice}; measured best: {row['best_text']}.</b> So {how} Your "
-            "eyes and the measurements disagree: which test would settle it?")
+        return head + ("Your image is sharper than the one that measured best. Is the extra "
+                       "detail real, or does it only look better? Which test would settle it?")
+    if order.index(key) < min(best):
+        return head + ("Your image is less sharp than the one that measured best. What did "
+                       "you not trust in the sharper ones?")
+    return head + "Which test would settle it?"
 
 
-BASELINES = ["plain Sentinel-2 (does SR add anything?)",
-             "real high-resolution images for a sample (how far from the best?)",
-             "the way we decide today (is it better than now?)"]
+BASELINES = ["Sentinel-2 alone (does SR add anything?)",
+             "real images for a sample of places (how close is SR?)",
+             "how we decide today (is SR better?)"]
 VERDICTS = ["pilot it", "test it first", "not a fit"]
 
 
 def cheat_panel():
     """Part 5: opens once the team has chosen an image in part 4. The cheat sheet for the
     kind of task, how it compares with the team's choice, and the team's test plan."""
-    holder = W.VBox([W.HTML(_note("&#128274; Opens once you have chosen an image in part 4 "
-                                  "(“Which image would you use?”).", "#8a6d00"))])
+    holder = W.VBox([W.HTML(_note("&#128274; Opens once you have chosen an image in part 4.",
+                                  "#8a6d00"))])
     state = {}
 
     def build():
@@ -952,10 +951,10 @@ def cheat_panel():
                              f"{agree}</p>")
             if r["notebook"]:
                 t, link = MEASURED[r["notebook"]]
-                parts.append("<p style='margin:6px 0'><b>Try your minimum value against our "
-                             f"data:</b> the notebook <a href='{link}' target='_blank'>{t}</a> "
-                             "lets you set your own budget and your own rule for a hit. Its "
-                             "result is measured, on that place.</p>")
+                parts.append("<p style='margin:6px 0'><b>Try your own numbers:</b> the "
+                             f"notebook <a href='{link}' target='_blank'>{t}</a> has measured "
+                             "results for this task. Set your own budget and your own rule "
+                             "for a hit.</p>")
             rules = "<ul style='margin:4px 0'>" + "".join(f"<li>{x}</li>" for x in RULES) + "</ul>"
             sheet.value = _card("".join(parts)) + _card("<b>Rules of thumb</b>" + rules, "#777")
         task.observe(draw, names="value")
@@ -963,13 +962,13 @@ def cheat_panel():
                     "200 blocks our field teams validated in 2025"),
                    ("TEST_BASELINE", "What would you compare it with? (tick all that apply)",
                     "checks", BASELINES),
-                   ("TEST_PASS", "The pass mark (from your minimum value in part 1)", "text",
+                   ("TEST_PASS", "Pass mark (your minimum from part 1)", "text",
                     "at least 10 hits in 20 visits, in two different cities"),
                    ("NEEDS", "What do you need to start? (data, people, partners, money)",
                     "text", "labels from the housing office; two weeks of an analyst"),
                    show=False)
         state["draw"] = draw
-        ui = W.VBox([task, sheet, W.HTML("<br><b>Next steps: how would you test it at "
+        ui = W.VBox([task, sheet, W.HTML("<br><b>Your test plan: how would you test this at "
                                          "home?</b>"), plan])
         ui.task, ui.sheet, ui.fields = task, sheet, plan.fields
         UI["cheat"] = ui
@@ -996,23 +995,24 @@ def cheat_panel():
 
 def scenario_card_text():
     lines = ["=" * 78]
-    for k, v in canvas_dict().items():
-        lines.append(f"{k.replace('_', ' ').upper():<16}{v}")
-    lines.append(f"{'SMALLEST THING':<16}{ANSWERS.get('size_m', 0):g} m")
+    answers = canvas_dict()
+    for k, _, _, label in CANVAS:
+        lines.append(f"{label:<16}{answers[k]}")
+    lines.append(f"{'SIZE':<16}{ANSWERS.get('size_m', 0):g} m")
     lines += ["-" * 78, f"{'AREA':<16}{ANSWERS.get('area', '(none chosen)')}"]
     info = S.get("scene_info") or {}
     if info.get("scenes"):
         days = sorted({s["date"] for s in info["scenes"]})
-        lines.append(f"{'SENTINEL-2':<16}{len(info['scenes'])} scenes on {len(days)} days, "
+        lines.append(f"{'SENTINEL-2':<16}{len(info['scenes'])} images on {len(days)} days, "
                      f"{days[0]} to {days[-1]}")
     if info.get("warnings"):
         lines.append(f"{'WARNINGS':<16}" + ", ".join(
             w if isinstance(w, str) else w.get("code", "?") for w in info["warnings"]))
     if S.get("money"):
-        lines.append(f"{'MONEY':<16}{S['money'][0]}")
+        lines.append(f"{'COST':<16}{S['money'][0]}")
         lines += [f"  - {x}" for x in S["money"][1:]]
     lines += ["-" * 78,
-              f"{'on Sentinel-2 we see it:':<28}{_said('SEE_S2')}",
+              f"{'visible on Sentinel-2:':<28}{_said('SEE_S2')}",
               f"{'we would use:':<28}{_said('LEVEL')}",
               f"{'because it shows:':<28}{_said('WHY')}",
               f"{'invented or wrong:':<28}{_said('INVENTED')}"]
@@ -1022,8 +1022,8 @@ def scenario_card_text():
                   f"{'cheat sheet:':<28}{r['verdict']} Measured best: {r['best_text']}."]
         key = _CHOICE_KEY.get(ANSWERS.get("LEVEL"))
         if key and r["best"]:
-            lines.append(f"{'our eyes and the sheet:':<28}"
-                         + ("agree" if key in r["best"] else "disagree"))
+            lines.append(f"{'cheat sheet agrees with us:':<28}"
+                         + ("yes" if key in r["best"] else "no"))
     lines += ["-" * 78, "TEST PLAN",
               f"{'check against:':<28}{_said('TEST_DATA')}",
               f"{'compare with:':<28}" + ("; ".join(ANSWERS.get("TEST_BASELINE") or [])
@@ -1042,7 +1042,7 @@ def scenario_card():
     """Part 6: the recommendation, then a card with everything the slide needs. It follows
     every answer above."""
     form = ask(("VERDICT", "Is super-resolution a fit for your scenario?", VERDICTS),
-               ("SAFEGUARDS", "Safeguards you insist on (tick all that apply)", "checks",
+               ("SAFEGUARDS", "Your safeguards (tick all that apply)", "checks",
                 SAFEGUARDS), show=False)
     card = W.HTML()
 
@@ -1050,8 +1050,8 @@ def scenario_card():
         card.value = _pre(scenario_card_text())
     ANSWER_REFRESH["scenario_card"] = update
     update()
-    ui = W.VBox([form, W.HTML("<b>Your card</b> (copy it onto your team slide; the picture is "
-                              "the download of part 4)"), card])
+    ui = W.VBox([form, W.HTML("<b>Your card.</b> Copy it to your team slide and add the image "
+                              "you downloaded in part 4."), card])
     ui.card, ui.fields = card, form.fields
     UI["scenario_card"] = ui
     display(ui)

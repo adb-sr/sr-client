@@ -1,37 +1,36 @@
-# ---- the ready-made areas and the image levels of the "your scenario" notebook ---------------
+# ---- the ready-made areas and the five images of the "your scenario" notebook ----------------
 # Plain data, used three ways: pasted into the notebook by build.py, imported by make_areas.py
-# (which runs the areas on the SR service and packs the pictures) and read by the tests.
+# (which runs the areas on the SR service and packs the images) and read by the tests.
 import numpy as np
 
 # key, name on screen, tau of stage 2 (None: no stage 2). nfe = tau, so cost scales with tau.
-LEVELS = [("s2", "Sentinel-2 (10 m, free)", None),
-          ("stage1", "SR stage 1 (careful)", None),
+LEVELS = [("s2", "Sentinel-2 (free, 10 m)", None),
+          ("stage1", "SR stage 1", None),
           ("t100", "SR stage 2, light", 100),
           ("t250", "SR stage 2, standard", 250),
           ("t500", "SR stage 2, strong", 500)]
 
-# slug: name, what you find there, centre, size (km), date (dry season where we could), and the
+# slug: name, what the area shows, centre, size (km), date (dry season where we could), and the
 # notebook with measured results for this very place, if there is one.
 AREAS = {
     # Philippines
     "tondo": dict(name="Tondo and Baseco, Manila", theme="Dense city, port, informal settlements",
                   lat=14.5960, lon=120.9620, km=3, date="2026-03-15"),
-    "payatas": dict(name="Payatas, Quezon City", theme="Settlements at the city edge",
+    "payatas": dict(name="Payatas, Quezon City", theme="Informal settlements at the city edge",
                     lat=14.7130, lon=121.1000, km=3, date="2026-03-15"),
-    "manila_south": dict(name="Manila South (labelled test area)",
-                         theme="Dense city; informal settlements outlined by experts",
+    "manila_south": dict(name="Manila South", theme="Dense city, informal settlements",
                          lat=14.5560, lon=121.0136, km=2, date="2025-06-01", measured="ifs"),
-    "sjdm": dict(name="San Jose del Monte, Bulacan", theme="City edge: new housing estates",
+    "sjdm": dict(name="San Jose del Monte, Bulacan", theme="City edge, new housing estates",
                  lat=14.8139, lon=121.0453, km=3, date="2026-03-15"),
     "marikina": dict(name="Marikina River, Marikina City", theme="River and flood plain in a city",
                      lat=14.6350, lon=121.0900, km=3, date="2026-03-15"),
     "rodriguez": dict(name="Rodriguez and San Mateo, Rizal", theme="Quarries at the forest edge",
                       lat=14.7450, lon=121.1500, km=3, date="2026-03-15"),
-    "hagonoy": dict(name="Hagonoy, Bulacan", theme="Fishponds and coast (expect a water warning)",
+    "hagonoy": dict(name="Hagonoy, Bulacan", theme="Fishponds and coast",
                     lat=14.8340, lon=120.7330, km=3, date="2026-03-15"),
     "munoz": dict(name="Science City of Muñoz, Nueva Ecija", theme="Small rice farms, farm roads",
                   lat=15.7150, lon=120.9050, km=3, date="2026-03-15"),
-    "nueva_ecija": dict(name="Nueva Ecija (as in practical demonstration 2)",
+    "nueva_ecija": dict(name="Nueva Ecija (from practical demonstration 2)",
                         theme="Rice farms and a town", lat=15.5784, lon=120.9726, km=2,
                         date="2026-03-15"),
     "new_clark": dict(name="New Clark City, Tarlac", theme="Large construction sites, new roads",
@@ -39,7 +38,7 @@ AREAS = {
     "tacloban": dict(name="Tacloban City, Leyte", theme="Coastal city rebuilt after a typhoon",
                      lat=11.2433, lon=125.0040, km=3, date="2026-04-15"),
     # other countries
-    "hanoi": dict(name="Hanoi, Red River banks (labelled area)",
+    "hanoi": dict(name="Hanoi, Red River banks",
                   theme="City edge: villages, rice fields, building sites",
                   lat=21.0787, lon=105.7822, km=3, date="2025-11-15", measured="lc"),
     "phnom_penh": dict(name="Phnom Penh, southern edge", theme="City growing into wetland",
@@ -53,7 +52,7 @@ AREAS = {
 
 def stretch_u8(arrays, ref=None):
     """Float RGB arrays (H, W, 3; any range, NaN = no data) to uint8 with ONE contrast stretch
-    for all of them, taken from ``ref`` (default: stage 1, else the first). So the levels can
+    for all of them, taken from ``ref`` (default: stage 1, else the first). So the images can
     be compared: none is brightened more than another."""
     ref = ref or ("stage1" if "stage1" in arrays else next(iter(arrays)))
     r = np.nan_to_num(np.asarray(arrays[ref], dtype="float32"))

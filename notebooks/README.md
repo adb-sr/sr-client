@@ -15,9 +15,6 @@ cells from top to bottom. Nothing to install on your computer.
 | Notebook | What it is | Open |
 |---|---|---|
 | [`hackathon/scenario`](hackathon/scenario/README.md) | **Your scenario**: is super-resolution a fit for your decision? Start here. | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/hackathon/scenario/hackathon_scenario.ipynb) |
-| [`hackathon/informal_settlements`](hackathon/informal_settlements/README.md) | Measured task: informal settlements, Metro Manila | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/hackathon/informal_settlements/hackathon_informal_settlements.ipynb) |
-| [`hackathon/land_cover`](hackathon/land_cover/README.md) | Measured task: land cover around Hanoi | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/hackathon/land_cover/hackathon_land_cover.ipynb) |
-| [`hackathon/field_boundaries`](hackathon/field_boundaries/README.md) | Measured task: field boundaries of smallholder farms | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/hackathon/field_boundaries/hackathon_field_boundaries.ipynb) |
 
 More on the hackathon: [`hackathon/README.md`](hackathon/README.md).
 

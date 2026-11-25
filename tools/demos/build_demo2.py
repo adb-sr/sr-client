@@ -112,52 +112,6 @@ a 10 m image, and super-resolution lets it work on free Sentinel-2. In a dense c
 the map against the dashed line before you trust it.
 """
 
-OWN_TEXT = r"""
-With a model trained on each image (within 2.5 m): buildings 0.63 to 0.80 on Sentinel-2
-against 0.62 to 0.78 on Stage 2; roads 0.25 to 0.37 against 0.24 to 0.38. This quick model
-only looks at colours and textures around each pixel and is scored on the east half only, so
-it is a rough test. Even so, trained on Sentinel-2 alone it reaches about the level the
-land-cover model reached on Stage 2 for buildings.
-"""
-
-
-FINETUNE_TEXT = r"""
-**What you need to fine-tune**
-
-* **Labels for your area.** Public maps (Open Buildings, OpenStreetMap) are a start, but you
-  saw their errors; a few hundred tiles checked or drawn by people who know the place are
-  worth more.
-* **The images you will use.** Fine-tune on the same kind of image you will run the model on:
-  if you will map from Stage 2, fine-tune on Stage 2.
-* **A test area the model never sees during training**, to score it honestly, as in part 5.
-* **A GPU for a few hours** (a free Colab GPU is enough for a first try).
-
-In code it looks roughly like this (a sketch, not run here):
-
-```python
-import torch
-from satlaspretrain_models.model import Model
-from satlaspretrain_models.utils import Backbone, Head
-
-model = Model(num_channels=3, multi_image=False, backbone=Backbone.SWINB, fpn=True,
-              head=Head.SEGMENT, num_categories=8, weights=None)
-state = torch.load("landcover_oem_satlas_swinb_fp16.pth")   # from Hugging Face, see below
-model.load_state_dict({k: v.float() for k, v in state.items()})
-
-# keep what it knows: the backbone learns slowly, the rest faster
-backbone = list(model.backbone.parameters())
-rest = [p for n, p in model.named_parameters() if not n.startswith("backbone.")]
-opt = torch.optim.AdamW([{"params": backbone, "lr": 1e-5}, {"params": rest, "lr": 1e-4}],
-                        weight_decay=1e-4)
-model.train()
-for images, labels in tiles_of_your_area:     # (B, 3, H, W) images; (B, H, W) classes 0-7
-    _, loss = model(images, labels)
-    opt.zero_grad()
-    loss.backward()
-    opt.step()
-```
-"""
-
 md(r"""
 # Practical demonstration 2: from super-resolved images to maps
 
@@ -190,8 +144,7 @@ code('# @title Helper functions (run this cell; you do not need to read it) { di
      + f'DATA_URL = os.environ.get("DEMO2_DATA_URL", "{DATA_URL}")\n\n\n'
      + (HERE / "widgets_common.py").read_text() + "\n\n"
      + (HERE / "d2_widgets.py").read_text() + "\n\n"
-     + as_code("FOUND", {"found_home": OEM_TEXT, "found_places": RESULTS_TEXT,
-                         "found_own": OWN_TEXT, "finetune": FINETUNE_TEXT})
+     + as_code("FOUND", {"found_home": OEM_TEXT, "found_places": RESULTS_TEXT})
      + "NOTES.update(FOUND)\n", hidden=True)
 
 # ---- part 1 ---------------------------------------------------------------------------------
@@ -356,26 +309,6 @@ Where does super-resolution help most? Where does it make no difference?
 """)
 code("all_places_view(DATA_URL)")
 found("What we found in the places", "found_places")
-
-md(r"""
-## 7. Going further: fine-tune the model
-
-We used the model **as it is**. The usual next step is to **fine-tune** it on labelled
-examples from your own area.
-
-**One trap: compare fairly.** Before the workshop we trained a quick model on each of the
-three images. Look at the chart: **the gap between the images almost disappears.** A model
-trained on Sentinel-2 learns to read Sentinel-2. So:
-
-* if a good model trained on high-resolution images exists for your task, super-resolution
-  lets you run it on free Sentinel-2;
-* if you train your own model anyway, test whether super-resolution still helps.
-
-Tomorrow's hackathon starts here.
-""")
-code("all_places_view(DATA_URL, own_model=True)")
-found("What we found with a model trained on each image", "found_own")
-found("How to fine-tune: what you need, and a code sketch", "finetune")
 
 md(r"""
 **Before you use a map**

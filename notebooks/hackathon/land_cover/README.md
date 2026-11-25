@@ -2,9 +2,9 @@
 
 [Open the notebook in Colab](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/hackathon/land_cover/hackathon_land_cover.ipynb)
 
-**Question:** would you use super-resolved Sentinel-2 to decide which places to inspect (for
-example open construction sites that raise dust, new buildings on farmland, or missing roads),
-and how?
+**Question:** would you use super-resolved Sentinel-2 to decide which places to inspect or map
+first (dusty building sites, houses on protected farmland, roads missing from the map, trees
+to protect), and how?
 
 ## The data
 
@@ -28,20 +28,18 @@ and how?
 | SR stage 2 | 0.70 | 0.34 | 0.70 | 0.48 | 0.23 | 0.61 | 0.25 | 0.474 | 0.474 |
 | Real high-res | 0.72 | 0.50 | 0.81 | 0.57 | 0.35 | 0.68 | 0.34 | 0.567 | 0.567 |
 
-## Example scenario (use it if you have none of your own)
+## The briefs (mock: the kind of decision is real, the office and numbers are invented)
 
-> **City environment department, air-quality enforcement unit.** Each month, inspectors check
-> places that raise dust: open construction sites, cleared land and sand yards. **Budget:** 20
-> inspections, one 80 m × 80 m cell each. **Hit:** a cell where at least 20 % of the ground is
-> bare soil or sand. **A wasted inspection** costs one inspector-day. **A missed site** means a
-> dust source left uncontrolled for a month, worth about three inspector-days.
+| Brief | Decision | Settings |
+|---|---|---|
+| **Which building sites get a dust inspection?** (city environment department) | Monthly dust inspections | 20 visits, 80 m cells, hit = at least 20 % bare soil or sand |
+| **Are houses going up on protected farmland?** (land-use and zoning office) | Quarterly site checks for buildings without a conversion permit | 15 visits, 160 m cells, hit = at least half cropland and 5 % buildings |
+| **Which parts of the road map are out of date?** (public works) | Which cells the mappers redraw first, e.g. for farm-to-market roads | 40 cells of 160 m, hit = at least 10 % road |
+| **Where is the tree cover we must protect?** (parks office) | Which cells get a tree survey and protection | 20 visits, 80 m cells, hit = at least 30 % trees |
 
-Other decisions the same notebook supports: buildings appearing on farmland (land-use
-enforcement), roads (map updates, access), built-up or green cover (heat, drainage planning).
-
-Questions to sharpen it:
-- Is bare soil really what you are after? Riverbanks and fallow fields are bare too.
-- Would the inspectors go anyway, with or without a map? Then what does the map change?
+Or write your own. Questions to sharpen it:
+- Is the land cover really what you are after? Riverbanks and fallow fields are bare too.
+- Would the inspectors go anyway? Then what does the map change?
 - How fresh must the map be? Building sites open and close within months.
 
 ## Things to watch

@@ -2,8 +2,8 @@
 
 [Open the notebook in Colab](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/hackathon/informal_settlements/hackathon_informal_settlements.ipynb)
 
-**Question:** would you use super-resolved Sentinel-2 to decide where to send survey teams to
-find and verify informal settlements, and how?
+**Question:** would you use super-resolved Sentinel-2 to decide where field teams go to find
+and validate informal settlements, and how?
 
 ## The data
 
@@ -33,18 +33,17 @@ The notebook counts each pixel once; the paper scores overlapping 320 m patches,
 differ a little. The model-to-model spread is large on Sentinel-2 (0.3–19.6 %) and much smaller
 on stage 2 (19.4–28.6 %).
 
-## Example scenario (use it if you have none of your own)
+## The briefs (mock: the kind of decision is real, the office and numbers are invented)
 
-> **DHSUD regional office, informal settlement upgrading programme.** Each quarter, two-person
-> teams survey city blocks to verify and enumerate informal settlements. **Budget:** 20 survey
-> visits, one 100 m × 100 m block each. **Hit:** a block where at least a quarter of the area
-> is informal settlement. **A wasted visit** costs one survey day. **A missed block** means a
-> settlement left out of the programme for a year, worth about three survey days.
+| Brief | Decision | Settings |
+|---|---|---|
+| **Where should the validation teams go first?** (housing office) | Which blocks get a field validation this quarter, for the Local Shelter Plan | 20 visits, 100 m blocks, hit = at least a quarter informal |
+| **A settlement watch list for local governments?** (space agency) | Whether to send cities a quarterly "look here first" list | top 50 blocks, hit = at least 10 % informal, a wrong flag costs twice a miss |
 
-Questions to sharpen it:
-- Is a site visit really the action, or is it a desk review of the high-resolution image?
-- Is it worse to miss a settlement, or to label a formal neighbourhood "informal"? For whom?
-- Would you trust a map that shows informal settlements in places your staff know well?
+Or write your own. Questions to sharpen it:
+- Is a site visit really the action, or a desk check of a real image?
+- Which is worse: missing a settlement, or calling a formal neighbourhood "informal"? For whom?
+- Would you trust the map in places your staff know well?
 
 ## Things to watch
 
@@ -52,6 +51,8 @@ Questions to sharpen it:
   dense formal housing, markets and warehouses.
 - The models disagree a lot on Sentinel-2. With a single model, which you would have in
   practice, the result can be much better or much worse than the mean.
+- Part 5 of the notebook tests a mixed strategy: SR screens every block, and you buy real images
+  only for the few it flags.
 - The real imagery is licensed for the workshop only (separate download). The notebook works
   without it.
 

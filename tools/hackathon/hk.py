@@ -3,6 +3,7 @@
 # is self-contained. Edit it here, then re-run build.py.
 
 import json
+import math
 import os
 import shutil
 import sys
@@ -164,6 +165,13 @@ def _blank(ax, text="not available"):
     ax.set_xticks([]), ax.set_yticks([])
 
 
+def area_around(lat, lon, km=2.0):
+    """A km x km box [W, S, E, N] centred on (lat, lon); the same as sr_client.area_around."""
+    dlat = km / 2 / 111.32
+    dlon = km / 2 / (111.32 * max(math.cos(math.radians(lat)), 0.01))
+    return [round(v, 6) for v in (lon - dlon, lat - dlat, lon + dlon, lat + dlat)]
+
+
 # --------------------------------------------------------------------------- decisions
 
 def expected_hits(score, hit, k):
@@ -177,6 +185,46 @@ def expected_hits(score, hit, k):
     v = np.sort(score)[::-1][k - 1]
     above, tied = score > v, score == v
     return float(hit[above].sum() + (k - above.sum()) * hit[tied].mean())
+
+
+def hits_curve(score, hit):
+    """Expected hits among the top-k places for k = 1 .. n (ties share their hit rate).
+    hits_curve(score, hit)[k - 1] equals expected_hits(score, hit, k)."""
+    score = np.asarray(score, float)
+    hit = np.asarray(hit, float)
+    order = np.argsort(-score, kind="stable")
+    _, group, size = np.unique(-score[order], return_inverse=True, return_counts=True)
+    rate = np.bincount(group, weights=hit[order]) / size
+    return np.cumsum(rate[group])
+
+
+def visits_needed(score, hit, target):
+    """The smallest budget whose top places hold at least `target` hits (None: never)."""
+    curve = hits_curve(score, hit)
+    k = int(np.searchsorted(curve, target - 1e-9))
+    return k + 1 if k < len(curve) else None
+
+
+def screen_then_confirm(screen, confirm, hit, k, m, seed=0):
+    """Two steps: shortlist the top-m places with a cheap input (`screen`), look only at
+    those with a better input (`confirm`) and visit its top-k. Returns the expected hits."""
+    hit = np.asarray(hit, bool)
+    short = top_k(screen, max(int(m), int(k)), seed)
+    return expected_hits(np.asarray(confirm, float)[short], hit[short], k)
+
+
+def where_table(units, preds, hit, k, by="group", labels=None):
+    """Where the visits would go: places, true hits and the visits of each input (picked on
+    the mean score of its models), per area. Shows whether an area is left out."""
+    hit = np.asarray(hit, bool)
+    out = pd.DataFrame({"places": units.groupby(by).size(),
+                        "true hits": units[hit].groupby(by).size()}).fillna(0).astype(int)
+    for inp, p in preds.items():
+        picks = units.iloc[top_k(np.atleast_2d(p).mean(0), k)]
+        out[f"visits: {(labels or {}).get(inp, inp)}"] = picks.groupby(by).size()
+    out = out.fillna(0).astype(int).sort_values("true hits", ascending=False)
+    out.index.name = None
+    return out
 
 
 def top_k(score, k, seed=0):
@@ -221,19 +269,45 @@ def decide(units, preds, hit, budget, cost_wasted=1.0, cost_missed=1.0, labels=N
     return out
 
 
-def plot_decision(res, budget, title=""):
+def plot_decision(res, budget, title="", guess=None):
+    """Bars of hits per input. guess: {row name: your bet}, drawn as a black line."""
     names = list(res.index)
     keys = [next((k for k, v in SHORT.items() if v == nm or k == nm), nm) for nm in names]
     cols = [COLOURS.get(k, "#999") for k in keys]
     fig, ax = plt.subplots(figsize=(7, 0.45 * len(names) + 1))
     y = np.arange(len(names))[::-1]
     ax.barh(y, res["hits"], color=cols)
-    for yi, v in zip(y, res["hits"]):
-        ax.text(v + budget * 0.01, yi, f"{v:g}", va="center")
+    for yi, nm, v in zip(y, names, res["hits"]):
+        bet = (guess or {}).get(nm)      # keep the number clear of the bet line
+        ax.text(max(v, bet if bet is not None else 0) + budget * 0.012, yi, f"{v:g}", va="center")
+    shown = [(yi, guess[nm]) for yi, nm in zip(y, names) if guess and guess.get(nm) is not None]
+    if shown:
+        ax.vlines([g for _, g in shown], [yi - 0.46 for yi, _ in shown],
+                  [yi + 0.46 for yi, _ in shown], color="black", lw=2.5, label="your bet")
+        ax.legend(frameon=False, loc="lower right", bbox_to_anchor=(1, 1), fontsize=9)
+    ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
     ax.set_yticks(y, names)
     ax.set_xlim(0, budget * 1.12)
     ax.axvline(budget, color="#bbb", lw=1, ls="--")
     ax.set_xlabel(f"hits among the {budget} places you would visit")
+    ax.set_title(title, loc="left")
+    plt.tight_layout()
+    return fig
+
+
+def plot_strategies(rows, budget, title=""):
+    """rows: dicts with name, hits, cost (USD a year) and colour. One bar per strategy,
+    labelled with its hits and its imagery bill."""
+    fig, ax = plt.subplots(figsize=(8.6, 0.55 * len(rows) + 1.1))
+    y = np.arange(len(rows))[::-1]
+    ax.barh(y, [r["hits"] for r in rows], color=[r["colour"] for r in rows])
+    for yi, r in zip(y, rows):
+        cost = "free" if r["cost"] < 0.5 else f"USD {r['cost']:,.0f} a year"
+        ax.text(r["hits"] + budget * 0.01, yi, f"{r['hits']:.1f} hits · {cost}", va="center")
+    ax.set_yticks(y, [r["name"] for r in rows])
+    ax.set_xlim(0, budget * 1.75)
+    ax.set_xticks(np.linspace(0, budget, 5).round().astype(int))
+    ax.set_xlabel(f"hits among your {budget} visits (and the imagery bill for your whole area)")
     ax.set_title(title, loc="left")
     plt.tight_layout()
     return fig
@@ -259,8 +333,9 @@ def sweep(preds, hit, budgets=(5, 10, 20, 30, 50, 75, 100), labels=None, title="
 
 
 def overlap_table(preds, k, labels=None, seed=0):
-    """Share of the top-k places that two inputs have in common (first model of each)."""
-    picks = {i: set(top_k(np.atleast_2d(p)[0], k, seed)) for i, p in preds.items()}
+    """Share of the top-k places that two inputs have in common (picked on the mean score of
+    each input's models, like the pictures below it)."""
+    picks = {i: set(top_k(np.atleast_2d(p).mean(0), k, seed)) for i, p in preds.items()}
     names = list(picks)
     m = pd.DataFrame(index=names, columns=names, dtype=float)
     for a in names:
@@ -416,6 +491,7 @@ def ifs_gallery(task, units, idx, key="stage2", stretch="auto", ctx=128, title="
 # --------------------------------------------------------------------------- land cover (Hanoi)
 
 LC_NAMES = ["building", "road", "water", "tree", "low vegetation", "cropland", "bare soil or sand"]
+FARM_BUILDINGS = "farm_buildings"   # a target for lc_units: buildings in cells that are mostly cropland
 LC_COLOURS = np.array([[215, 48, 39], [99, 99, 99], [43, 131, 186], [26, 120, 50], [166, 217, 106],
                        [240, 210, 80], [191, 129, 45], [255, 255, 255]], np.uint8) / 255.0
 
@@ -438,12 +514,20 @@ def lc_metric_table(task):
     return pd.DataFrame(rows).set_index("input")
 
 
-def lc_units(task, cell_m=80, target=6, min_valid=0.8):
+def lc_classes(target):
+    """The class numbers behind a target (a class, several classes or FARM_BUILDINGS)."""
+    return (0,) if isinstance(target, str) else tuple(int(t) for t in np.atleast_1d(target))
+
+
+def lc_units(task, cell_m=80, target=6, min_valid=0.8, farm_share=0.5):
     """Cut every tile into square cells of cell_m metres. For each cell: the true share of the
     target class(es) and, per input, the share the task model labels as that class. Only
-    labelled pixels count; cells less than min_valid labelled are left out."""
+    labelled pixels count; cells less than min_valid labelled are left out.
+    target=FARM_BUILDINGS: the share of buildings, counted only in cells that are at least
+    farm_share cropland (0 elsewhere), on the expert map and on each model's own map."""
     c = max(4, int(round(cell_m / task.px)))
-    cls = tuple(np.atleast_1d(target))
+    farm = isinstance(target, str)
+    cls = lc_classes(target)
     rows, preds = [], {inp: [] for inp in task.inputs}
     for sid in task.scenes.index:
         lab, val = task.arr(sid, "label"), task.arr(sid, "valid")
@@ -453,14 +537,20 @@ def lc_units(task, cell_m=80, target=6, min_valid=0.8):
         def blocks(a):
             return a[:ny * c, :nx * c].reshape(ny, c, nx, c).sum((1, 3)).ravel()
         nv = blocks(val.astype(np.float32))
-        nt = blocks((np.isin(lab, cls) & val).astype(np.float32))
+
+        def share(classmap):
+            s = blocks((np.isin(classmap, cls) & val).astype(np.float32)) / np.maximum(nv, 1)
+            if farm:
+                crop = blocks(((classmap == 5) & val).astype(np.float32)) / np.maximum(nv, 1)
+                s = np.where(crop >= farm_share, s, 0.0)
+            return s
+        truth = share(lab)
         for inp in task.inputs:
-            p = np.isin(task.arr(sid, f"pred_{inp}"), cls) & val
-            preds[inp].append(blocks(p.astype(np.float32)) / np.maximum(nv, 1))
+            preds[inp].append(share(task.arr(sid, f"pred_{inp}")))
         for i in range(ny * nx):
             rows.append({"scene": sid, "group": task.scenes.loc[sid, "group"], "y0": (i // nx) * c,
                          "x0": (i % nx) * c, "size": c, "valid": nv[i] / c / c,
-                         "truth": nt[i] / max(nv[i], 1)})
+                         "truth": truth[i]})
     units = pd.DataFrame(rows)
     keep = units["valid"].values >= min_valid
     units = units[keep].reset_index(drop=True)
@@ -480,7 +570,7 @@ def lc_show(task, sid, inputs=None, stretch="auto", target=None, box=None, title
     inputs = inputs or ["s2_10m"] + task.inputs
     cols = inputs + ["reference"]
     lab = task.arr(sid, "label")
-    edge = _outline(np.isin(lab, np.atleast_1d(target))) if target is not None else None
+    edge = _outline(np.isin(lab, lc_classes(target))) if target is not None else None
     fig, axes = plt.subplots(2, len(cols), figsize=(2.5 * len(cols), 5.5), squeeze=False)
     for j, key in enumerate(cols):
         ax, bx = axes[0, j], axes[1, j]
@@ -537,7 +627,7 @@ def lc_gallery(task, units, idx, key="stage2", stretch="auto", ctx=96, title="",
         x0 = int(np.clip(cx - ctx_ // 2, 0, max(W - ctx_, 0)))
         ax.imshow(im[y0:y0 + ctx_, x0:x0 + ctx_])
         lab = task.arr(u.scene, "label")[y0:y0 + ctx_, x0:x0 + ctx_]
-        _overlay(ax, _outline(np.isin(lab, np.atleast_1d(target))), "black")
+        _overlay(ax, _outline(np.isin(lab, lc_classes(target))), "black")
         good = bool(hit[i]) if hit is not None else None
         ax.add_patch(Rectangle((u.x0 - x0 - .5, u.y0 - y0 - .5), u["size"], u["size"], fill=False,
                                ec=HIT_C if good else MISS_C, lw=2.5))
@@ -637,7 +727,7 @@ def ai4_show(task, sid, y0=0, x0=0, size=400, inputs=None, stretch="auto", seed=
         _overlay(ax, ref_edge, "#d73027", 0.9)
         ax.set_title(SHORT.get(key, key))
         if key == "s2_10m":
-            _blank(bx, "(each input has its\nown trained model)")
+            _blank(bx, "(each kind of image has\nits own trained model)")
         else:
             prob = task.arr(sid, f"prob_{key}_s0")[sl] / 255.0 if f"prob_{key}_s0" in task.keys(sid) else None
             if prob is not None:

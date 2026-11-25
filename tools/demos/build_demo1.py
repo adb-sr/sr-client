@@ -76,45 +76,19 @@ later depends on them.
 it. Sections 7 to 10 are for later.
 """)
 
-md("## 0. Setup\n\nRun the next three cells. The first takes about a minute.")
+md("## 0. Setup\n\nRun the next three cells. The first takes about a minute. The third asks for "
+   "your **email address**: type it and press Enter. That is all the service needs.")
 code(PIP)
-md(r"""
-Your API key starts with `srk_`. The cell asks for the key and the service URL (both are on
-your card). In Colab you can also store them under **Secrets** (the key icon on the left) as
-`SR_API_KEY` and `SR_API_URL`.
-""")
-code(r"""
-import getpass
-import os
-
-from sr_client import SRClient, SRError, area_around
-
-
-def secret(name, prompt):
-    if os.environ.get(name):
-        return os.environ[name]
-    try:
-        from google.colab import userdata
-        return userdata.get(name)
-    except Exception:
-        return getpass.getpass(prompt) if "KEY" in name else input(prompt)
-
-
-os.environ["SR_API_KEY"] = secret("SR_API_KEY", "API key (srk_...): ")
-os.environ["SR_API_URL"] = secret("SR_API_URL", "Service URL: ")
-
-sr = SRClient()
-me = sr.me()
-print(f"Key {me['prefix']} ({me['owner']}): up to {me['limits']['max_area_km']} km per side, "
-      f"${me['budget']['remaining_usd']:.2f} of budget left")
-""")
 code('# @title Helper functions (run this cell; you do not need to read it) { display-mode: "form" }\n'
+     + "from sr_client import SRClient, SRError, area_around\n\n"
+     + (HERE.parent / "connect.py").read_text() + "\n\n"
      + (HERE / "d1_helpers.py").read_text() + "\n\n"
      + as_code("PLACES", {k: {f: v[f] for f in ("lat", "lon", "date", "note")}
                           for k, v in PLACES.items()})
      + as_code("EXPERIMENTS", EXPERIMENTS) + "\n\n"
      + (HERE / "widgets_common.py").read_text() + "\n\n"
      + (HERE / "d1_widgets.py").read_text(), hidden=True)
+code("sr = connect()")
 
 # ---- part 1 ---------------------------------------------------------------------------------
 md(rf"""

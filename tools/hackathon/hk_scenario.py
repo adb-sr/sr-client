@@ -300,10 +300,8 @@ def _scene_html(info):
 
 
 def _connect_box(on_connected):
-    key = W.Password(value=os.environ.get("SR_API_KEY", ""), description="API key (srk_...)",
-                     layout=_WIDE, style=_LABEL)
-    url = W.Text(value=os.environ.get("SR_API_URL", ""), description="Service address",
-                 layout=_WIDE, style=_LABEL, placeholder="https://...")
+    email = W.Text(description="Your email address", layout=_WIDE, style=_LABEL,
+                   placeholder="name@agency.gov")
     go = W.Button(description="Connect", icon="plug", button_style="primary",
                   layout=W.Layout(width="220px"))
     status = W.HTML()
@@ -319,21 +317,22 @@ def _connect_box(on_connected):
                                check=True)
                 importlib.invalidate_caches()
             from sr_client import SRClient
-            sr = SRClient(key.value.strip() or _secret("SR_API_KEY"),
-                          url=url.value.strip() or _secret("SR_API_URL"))
+            if not _stored_key():        # no key yet: the service gives one for an email
+                sr_signup(email.value)
+            sr = SRClient(_stored_key(), url=os.environ.get("SR_API_URL") or SERVICE_URL)
             left = sr.me().get("budget")
             S["sr"] = sr
             status.value = _note(f"Connected. Budget of this key: {left}", "#1a7f37")
             on_connected()
         except Exception as exc:
-            status.value = _note(f"Could not connect: {_html.escape(str(exc))}. Check the key "
-                                 "and the address on your team card.", "#b00020")
+            status.value = _note(f"Could not connect: {_html.escape(str(exc))}. Check the "
+                                 "email address, or ask an instructor.", "#b00020")
         finally:
             go.disabled = False
     go.on_click(on_go)
-    box = W.VBox([W.HTML(_note("The API key and the service address are on your team card.")),
-                  key, url, go, status])
-    box.key, box.url, box.go, box.status = key, url, go, status
+    box = W.VBox([W.HTML(_note("Type your email address: the service gives you a key for it.")),
+                  email, go, status])
+    box.email, box.go, box.status = email, go, status
     return box
 
 
@@ -343,7 +342,7 @@ def area_panel():
     and what the computing costs."""
     themed = [(f"{a['theme']}  ·  {a['name']}" + ("  ★" if a.get("measured") else ""), slug)
               for slug, a in AREAS.items()]
-    place = W.Dropdown(options=themed + [("Our own area (needs the API key)", OWN)],
+    place = W.Dropdown(options=themed + [("Our own area (needs your email)", OWN)],
                        value=themed[0][1], description="Area", layout=W.Layout(width="760px"),
                        style={"description_width": "60px"})
     info = W.HTML()

@@ -130,10 +130,15 @@ _mod, _cl = types.ModuleType("sr_client"), types.ModuleType("sr_client.client")
 _mod.SRClient, _mod.SRError = _SR, type("SRError", (Exception,), {})
 _cl.FINISHED = ("done", "partial", "failed", "cancelled")
 _sys.modules.update({"sr_client": _mod, "sr_client.client": _cl})
+def sr_signup(email, url=None):         # stands in for the service's sign-up
+    if "@" not in email:
+        raise RuntimeError("that does not look like an email address")
+    os.environ["SR_API_KEY"], os.environ["SR_API_URL"] = "srk_test", "http://fake"
+    return {"key": "srk_test"}
 c = UI["sr_connect"]
-c.go.click()                              # no key yet: a clear message, no crash
+c.go.click()                              # no email yet: a clear message, no crash
 assert "Could not connect" in c.status.value
-c.key.value, c.url.value = "srk_test", "http://fake"
+c.email.value = "someone@agency.gov"
 c.go.click()
 assert "Connected" in c.status.value, c.status.value
 UI["sr"].send.click()
@@ -286,9 +291,14 @@ look.load.click()
 assert "Nothing to load yet" in look.status.value
 a.send.click()
 assert "Connect first" in a.status.value
-a.connect.go.click()                      # no key yet: a clear message, no crash
+def sr_signup(email, url=None):         # stands in for the service's sign-up
+    if "@" not in email:
+        raise RuntimeError("that does not look like an email address")
+    os.environ["SR_API_KEY"], os.environ["SR_API_URL"] = "srk_test", "http://fake"
+    return {"key": "srk_test"}
+a.connect.go.click()                      # no email yet: a clear message, no crash
 assert "Could not connect" in a.connect.status.value
-a.connect.key.value, a.connect.url.value = "srk_test", "http://fake"
+a.connect.email.value = "someone@agency.gov"
 a.connect.go.click()
 assert "Connected" in a.connect.status.value, a.connect.status.value
 a.check.click()

@@ -10,7 +10,7 @@ _BUSY = [False]
 
 def _place_needed():
     if "place" not in S:
-        display(W.HTML(_note("<b>Run the cell of step 2 first</b>, then run this cell again.",
+        display(W.HTML(_note("<b>Run the cell of part 2 first</b>, then run this cell again.",
                              "#b00020")))
         return False
     return True
@@ -161,7 +161,7 @@ def model_at_home(url):
 # ---- step 2: pick your place ----------------------------------------------------------------
 
 def pick_place(url):
-    """A menu of the five places: choosing one loads it, and every step below follows."""
+    """A menu of the five places: choosing one loads it, and every part below follows."""
     menu = W.Dropdown(options=list(PLACES), value=PLACE_DEFAULT, description="Place",
                       layout=_WIDE, style=_LABEL)
     status = W.HTML()
@@ -242,7 +242,7 @@ def show_scores():
 
     def reveal(_):
         if not (ANSWERS.get("GUESS_BUILDINGS") and ANSWERS.get("GUESS_ROADS")):
-            note.value = _note("Make both guesses in step 3 first (or press again to see the "
+            note.value = _note("Make both guesses in part 3 first (or press again to see the "
                                "scores without a guess).", "#b00020")
             if not note.warned:
                 note.warned = True
@@ -332,3 +332,94 @@ def all_places_view(url, own_model=False):
     ui = W.VBox([_switches(lines=not own_model), chart, table])
     UI["own" if own_model else "all"] = ui
     display(ui)
+
+
+# ---- "under the hood" cells: the plain code behind each part ---------------------------------
+
+def picked_place():
+    """The place chosen in the menu of part 2."""
+    if "place" not in S:
+        raise NotYet("Run the cell of part 2 first (it loads your place), then run this cell "
+                     "again.")
+    return S["place"]
+
+
+NOTES = {
+    "scores": """
+**How the scores work** (the same in the whole notebook)
+
+* **Recall**: the share of the true buildings (or roads) that the model found.
+  **Precision**: of what the model marks as building, the share that is right. Each alone can
+  be gamed: a map that says "building" everywhere has a perfect recall, and a map that marks
+  one sure building has a perfect precision.
+* **F1** combines the two: 0 = nothing right, 1 = perfect. **IoU** (intersection over union)
+  is the share both maps agree on, out of everything either map calls a building. It is
+  always lower than F1 (IoU = F1 / (2 − F1)) and ranks the images in the same order; it is the
+  number most papers report.
+* **A pixel counts**: two maps never line up to the metre. *Pixel-exact* counts only the very
+  same pixel; *within 2.5 m* forgives a shift of one pixel; *within 5 m* forgives two. The
+  more you forgive, the higher every score.
+* **Two useless maps to compare with** (tick them on or off):
+  * a map that says **"building" everywhere** (dashed line, "everywhere" in the table above).
+    In a dense city it scores high, because almost every spot is near a building.
+  * a map that says **"no building" anywhere** (dotted line). It scores 0 on F1, IoU and
+    recall, and has no precision at all: it marks nothing. Yet 83 % of its pixels are right
+    here, and 95 % in Nueva Ecija, because most pixels are not buildings. That is why maps of
+    rare things are not scored by the share of pixels right.
+* **The confusion matrix** (under the examples) shows, for each class drawn by hand, which
+  class the model gave those pixels. The diagonal is right; everything else is a confusion.
+  It counts pixel-exact: a pixel has to land in one box, so the tolerance does not apply.
+""",
+    "package": """
+**What was done before the workshop**, for each of the five places:
+
+1. **The images** come from the super-resolution service: the same job as this morning
+   (`sr.submit(area, date)`). Stage 1 and Stage 2 are its two results. "Sentinel-2" is its
+   10 m input (`lr_reference.tif`), enlarged to the same 2.5 m grid, so all three images
+   line up pixel by pixel.
+2. **The maps**: the land-cover model was run on each of the three images (part 4).
+3. **The public maps** were downloaded for the same square and drawn on the same grid, as
+   yes/no maps of buildings and of roads (part 5). Above: buildings red, roads yellow.
+4. **Valid** marks where the images have data; empty squares are left out of every score.
+
+The notebook only downloads the result (about 12 MB per place), so it needs no key and no
+GPU.
+""",
+    "model": """
+**How the maps were made.** The same land-cover model, unchanged, read each of the three
+images: red, green and blue at 2.5 m, cut into overlapping squares of 960 m. For every pixel
+it gives a probability for each of the 8 classes; the map keeps the most likely one. Roughly,
+in code (run before the workshop, not here):
+
+```python
+from satlaspretrain_models.model import Model
+from satlaspretrain_models.utils import Backbone, Head
+
+model = Model(num_channels=3, multi_image=False, backbone=Backbone.SWINB, fpn=True,
+              head=Head.SEGMENT, num_categories=8, weights=None)
+model.load_state_dict(weights)                # fine-tuned on OpenEarthMap; on Hugging Face
+
+for name, image in images.items():            # Sentinel-2 enlarged, Stage 1, Stage 2
+    probabilities = model(image[:3])[0].softmax(1)
+    maps[name] = probabilities.argmax(1)      # one class (0-7) per pixel
+```
+
+Nothing was trained or tuned on these images. If the three maps differ, it is only because
+the images differ.
+""",
+    "public": """
+**The public maps, and their limits**
+
+* **Open Buildings**: building footprints from Google, Microsoft and OpenStreetMap, combined
+  by VIDA. They were made by a model from 50 cm images, so they are good but not perfect.
+* **OpenStreetMap roads** (through Overture Maps). Roads are lines, so each one is widened
+  to a typical width for its class: 12 m for a motorway, 5 m for a residential street, 3 m
+  for a farm track.
+* Both are drawn on the 2.5 m grid of the images. An error in the public map counts against
+  the model: a road that is missing in OpenStreetMap turns a correct road into a "false
+  alarm". So even a perfect model would not reach 1 here.
+
+**The dashed line** is the last row above: a map that says yes everywhere. Its recall is 1 and
+its precision is the share of the area that is near a building, which is high in a dense city.
+""",
+}

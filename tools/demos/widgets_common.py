@@ -53,3 +53,18 @@ def ask(*questions):
     box.fields = [r.field for r in rows]
     display(box)
     return box
+
+
+# ---- "under the hood" cells: the plain code behind a part ------------------------------------
+
+class NotYet(Exception):
+    """An earlier part is missing. Shown as one line, without a traceback."""
+
+    def _render_traceback_(self):
+        return [f"\x1b[31m{self}\x1b[0m"]
+
+
+def explain(key):
+    """The note that goes with an "under the hood" cell (the notebook's NOTES)."""
+    from IPython.display import Markdown
+    display(Markdown(NOTES[key].strip("\n")))

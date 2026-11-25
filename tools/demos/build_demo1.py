@@ -316,15 +316,19 @@ md(r"""
 **Near-infrared and vegetation.** The model also sharpens the near-infrared band, which our
 eyes cannot see. Plants reflect a lot of it. The false-colour image shows near-infrared as
 red; NDVI turns it into a vegetation index (green = dense vegetation).
+
+Both use **Stage 1**, not Stage 2. An index is a measurement, so truthful matters more than
+sharp: Stage 1 only combines what the satellite measured, while Stage 2 draws detail that is
+plausible but was not measured.
 """)
 code(r"""
 LAT, LON, DATE, area, job = picked()
-lr, s2 = load(job, "lr_reference.tif"), load(job, "stage2_sr.tif")
-show([view(lr, LAT, LON, 1000), view(s2, LAT, LON, 1000)],
-     ["Sentinel-2, false colour", "Stage 2, false colour"], bands=(4, 1, 2), ceiling=0.45,
+lr, s1 = load(job, "lr_reference.tif"), load(job, "stage1_sr.tif")
+show([view(lr, LAT, LON, 1000), view(s1, LAT, LON, 1000)],
+     ["Sentinel-2, false colour", "Stage 1, false colour"], bands=(4, 1, 2), ceiling=0.45,
      size=5.5)
 fig, axes = plt.subplots(1, 2, figsize=(11, 5))
-for ax, (title, da) in zip(axes, [("Sentinel-2, 10 m", lr), ("Stage 2, 2.5 m", s2)]):
+for ax, (title, da) in zip(axes, [("Sentinel-2, 10 m", lr), ("Stage 1, 2.5 m", s1)]):
     im = ax.imshow(view(ndvi(da), LAT, LON, 1000).values, cmap="RdYlGn", vmin=-0.2, vmax=0.8,
                    interpolation="nearest")
     ax.set_title(f"NDVI, {title}")

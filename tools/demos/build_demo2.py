@@ -102,11 +102,11 @@ RESULTS_TEXT = r"""
 **Bangkok, Phnom Penh and Dhaka** (Sentinel-2 / Stage 1 / Stage 2, within 2.5 m) show the same
 order:
 
-* **Buildings**: Bangkok 0.32 / 0.62 / 0.77, Phnom Penh 0.46 / 0.82 / 0.87, Dhaka 0.03 / 0.07 /
-  0.55. In Dhaka the map from Stage 2 stays below the "building everywhere" line (0.60): the
-  blocks are very dense, and the model finds only 41 % of the buildings.
-* **Roads**: Bangkok 0.08 / 0.44 / 0.53, Phnom Penh 0.04 / 0.46 / 0.59, Dhaka 0.02 / 0.13 /
-  0.43, all above the "roads everywhere" line (0.30 to 0.35) with Stage 2.
+* **Buildings**: Bangkok 0.32 / 0.62 / 0.77, Phnom Penh 0.46 / 0.82 / 0.87, Dhaka 0.03 / 0.17 /
+  0.59. In Dhaka the map from Stage 2 only just reaches the "building everywhere" line
+  (0.60): the blocks are very dense, and the model finds less than half of the buildings.
+* **Roads**: Bangkok 0.08 / 0.44 / 0.53, Phnom Penh 0.04 / 0.46 / 0.59, Dhaka 0.06 / 0.15 /
+  0.44, all above the "roads everywhere" line (0.30 to 0.35) with Stage 2.
 
 This is the pattern of Session 3: a model trained on real high-resolution images cannot read
 a 10 m image, and super-resolution lets it work on free Sentinel-2. In a dense city, check

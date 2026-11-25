@@ -31,7 +31,7 @@ PLACES = {
         lat=11.5650, lon=104.9250, date="2026-02-01", confirmed=True, iso="KHM",
         note="city centre: Central Market, Royal Palace, riverfront, dense blocks"),
     "Dhaka, Bangladesh": dict(
-        lat=23.7600, lon=90.3850, date="2026-01-15", confirmed=True, iso="BGD",
+        lat=23.7600, lon=90.3850, date="2025-11-15", confirmed=True, iso="BGD",   # Jan-Mar: haze
         note="city centre: National Parliament, Farmgate, old airport, dense housing"),
 }
 OWN_PLACE = "My own place"

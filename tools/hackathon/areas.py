@@ -49,7 +49,7 @@ AREAS = {
         "jakarta": dict(name="North Jakarta coast", theme="Dense coastal city, port",
                     lat=-6.1150, lon=106.8000, km=3, date="2026-08-15"),
     "dhaka": dict(name="Dhaka, eastern edge", theme="City growing into flood plain",
-                  lat=23.7800, lon=90.4500, km=3, date="2026-01-15"),
+                  lat=23.7800, lon=90.4500, km=3, date="2025-11-15"),   # Jan-Mar: haze
 }
 
 

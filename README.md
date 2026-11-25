@@ -23,7 +23,25 @@ sr2 = job.open("stage2_sr.tif")       # xarray, reflectance (needs [geo])
 job.download("results/")              # every file, under results/<job id>/
 ```
 
-A [Colab notebook](notebooks/workshop.ipynb) walks through the whole thing.
+A [Colab notebook](notebooks/workshop.ipynb) walks through the whole thing. Two more notebooks
+go with the SSTA workshop sessions ([all notebooks, with links to open them in Colab](notebooks/README.md)):
+
+- [`demo1_super_resolution.ipynb`](notebooks/demo1_super_resolution.ipynb): one notebook for
+  presenter and participants, no coding needed. Pick one of five places, then go part by part:
+  the 8 inputs, stage 1, stage 2, one dial experiment, each with a question. Every part has a
+  one-line cell that shows the images and controls, and a collapsed "Under the hood" cell with
+  the plain client code behind it (search, manifest, tiles, quality flags, files). "Going
+  deeper" at the end: all dial settings (`tau`, `nfe`), what the model invents (seeds), a
+  check against real 1 m images.
+- [`demo2_use_cases.ipynb`](notebooks/demo2_use_cases.ipynb): from images to maps, for the
+  same five places. A land-cover model trained on real high-resolution images is first scored
+  on hand-labelled OpenEarthMap tiles, then on Sentinel-2, stage 1 and stage 2 of each place
+  (run before the workshop); participants score the maps against Open Buildings and
+  OpenStreetMap (F1 or IoU, pixel-exact or within 2.5 / 5 m), look for rescues and failures,
+  and read a short section on fine-tuning. Needs no key and no GPU.
+
+The notebooks are generated: edit `tools/demos/` (`places.py`, the helper files and the
+`build_*.py` scripts) and rebuild, do not edit the `.ipynb` files.
 
 ## What you get
 
@@ -35,7 +53,7 @@ Each job writes these files, kept for 30 days. Download links last 7 days, and c
 | `stage1_sr.tif` | Stage 1 (multi-image SR): RGBN, 2.5 m, uint16 reflectance × 10000, nodata 0 |
 | `stage2_sr.tif` | Stage 2 (diffusion refinement), same layout |
 | `lr_reference.tif` | The 10 m Sentinel-2 input composite on the same grid |
-| `validity.tif` | 0 nodata · 1 valid · 2 low-diversity (fewer than 8 distinct clear scenes) |
+| `validity.tif` | 0 nodata · 1 valid · 2 low-diversity (fewer than 4 distinct clear scenes) |
 | `stage*_preview.png` | RGB previews |
 | `manifest.json` | Scenes used per tile, parameters, model versions, cost, warnings, attribution |
 

@@ -325,13 +325,6 @@ def result_card():
 
 # ---- "under the hood" cells: the plain code behind each step ---------------------------------
 
-class NotYet(Exception):
-    """An earlier step is missing. Shown as one line, without a traceback."""
-
-    def _render_traceback_(self):
-        return [f"\x1b[31m{self}\x1b[0m"]
-
-
 def picked():
     """The place sent in part 1: (lat, lon, date, area, job)."""
     if "job" not in S:
@@ -415,9 +408,3 @@ that size is not checked by it. *Fine detail*: the average change in brightness 
 to the next. The cost of Stage 2 grows with the number of steps (`nfe`).
 """,
 }
-
-
-def explain(key):
-    """The note that goes with an "under the hood" cell."""
-    from IPython.display import Markdown
-    display(Markdown(NOTES[key].strip("\n")))

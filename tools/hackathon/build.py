@@ -19,7 +19,8 @@ REPO = "adb-sr/sr-client"
 BRANCH = "main"
 DATA_URL = "https://huggingface.co/datasets/adbsr-internal/ssta-hackathon/resolve/main"
 
-HELPERS = (HERE / "hk.py").read_text() + "\n\n" + (HERE / "hk_widgets.py").read_text()
+HELPERS = "\n\n".join([(HERE / "hk.py").read_text(), (HERE.parent / "connect.py").read_text(),
+                       (HERE / "hk_widgets.py").read_text()])
 SCENARIO_HELPERS = "\n\n".join([HELPERS, (HERE / "areas.py").read_text(),
                                 (HERE / "hk_scenario.py").read_text()])
 
@@ -246,8 +247,8 @@ def api_cells(places_code, note, lat, lon):
     return [md(f"""
 ## C. Super-resolve an area of your own
 
-The SR service makes stage 1 and stage 2 images of any area up to 5 km × 5 km. Type the API key
-(`srk_...`) and the service address from your team card, then press **Connect**. The ready-made
+The SR service makes stage 1 and stage 2 images of any area up to 5 km × 5 km. Type your email
+address and press **Connect**: the service gives you a key for it. The ready-made
 areas come back in seconds and cost nothing. A new area takes 3–6 minutes. Choose "My own
 place" to try a place you know.
 
@@ -610,7 +611,7 @@ Choose an area where your decision applies.
 
 * **Ready-made areas.** We prepared these before the workshop. Take the one most like your
   scenario. No key needed.
-* **Your own area.** Up to 2 km × 2 km. You need the API key on your team card. The SR service
+* **Your own area.** Up to 2 km × 2 km. You only need your email address. The SR service
   takes 5 to 10 minutes, so **send it before lunch**.
 
 For each area you see **how many Sentinel-2 images exist** around your date. Super-resolution

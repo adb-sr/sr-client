@@ -432,7 +432,8 @@ def all_places(summary, value="F1", metres=TOLERANCE_M):
 
 
 def _short(name):
-    return name.split(",")[0].replace(" office", "").replace(" headquarters", " HQ")
+    return (name.split(",")[0].replace(" office", "").replace(" headquarters", " HQ")
+            .replace(" City and Mandaue", "").replace(" rice farms", ""))
 
 
 def fig_all_places(summary, metric="F1", metres=TOLERANCE_M, own_model=False, yes=True,

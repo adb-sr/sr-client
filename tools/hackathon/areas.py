@@ -43,10 +43,13 @@ AREAS = {
                   lat=21.0787, lon=105.7822, km=3, date="2025-11-15", measured="lc"),
     "phnom_penh": dict(name="Phnom Penh, southern edge", theme="City growing into wetland",
                        lat=11.5000, lon=104.9200, km=3, date="2026-02-01"),
-    "jakarta": dict(name="North Jakarta coast", theme="Dense coastal city, port",
+    "bangkok": dict(name="Bangkok, old city on the Chao Phraya",
+                    theme="Dense historic city, river, temples",
+                    lat=13.7500, lon=100.4915, km=3, date="2026-01-15"),
+        "jakarta": dict(name="North Jakarta coast", theme="Dense coastal city, port",
                     lat=-6.1150, lon=106.8000, km=3, date="2026-08-15"),
     "dhaka": dict(name="Dhaka, eastern edge", theme="City growing into flood plain",
-                  lat=23.7800, lon=90.4500, km=3, date="2026-01-15"),
+                  lat=23.7800, lon=90.4500, km=3, date="2025-11-15"),   # Jan-Mar: haze
 }
 
 

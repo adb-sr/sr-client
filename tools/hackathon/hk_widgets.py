@@ -1070,25 +1070,11 @@ OWN_PLACE = "My own place"
 SR_CLIENT = "sr-client[geo,viz] @ git+https://github.com/adb-sr/sr-client@v0.1.0"
 
 
-def _secret(name):
-    """An API setting from the environment or from Colab's Secrets panel ('' if not there)."""
-    if os.environ.get(name):
-        return os.environ[name]
-    try:
-        from google.colab import userdata
-        return userdata.get(name) or ""
-    except Exception:
-        return ""
-
-
 def sr_connect(ready_made, default_lat, default_lon):
-    """Type the API key and the service address from your team card (or keep them in Colab's
-    Secrets as SR_API_KEY and SR_API_URL), press Connect, then choose an area. Nothing here
-    runs before you press the button, so Run all never waits for a key."""
-    key = W.Password(value=os.environ.get("SR_API_KEY", ""), description="API key (srk_...)",
-                     layout=_WIDE, style=_LABEL)
-    url = W.Text(value=os.environ.get("SR_API_URL", ""), description="Service address",
-                 layout=_WIDE, style=_LABEL, placeholder="https://...")
+    """Type your email address and press Connect (the service gives you a key for it), then
+    choose an area. Nothing here runs before you press the button, so Run all never waits."""
+    email = W.Text(description="Your email address", layout=_WIDE, style=_LABEL,
+                   placeholder="name@agency.gov")
     go = W.Button(description="Connect", icon="plug", button_style="primary",
                   layout=W.Layout(width="220px"))
     status = W.HTML()
@@ -1105,20 +1091,21 @@ def sr_connect(ready_made, default_lat, default_lon):
                                check=True)
                 importlib.invalidate_caches()
             from sr_client import SRClient
-            sr = SRClient(key.value.strip() or _secret("SR_API_KEY"),
-                          url=url.value.strip() or _secret("SR_API_URL"))
+            if not _stored_key():        # no key yet: the service gives one for an email
+                sr_signup(email.value)
+            sr = SRClient(_stored_key(), url=os.environ.get("SR_API_URL") or SERVICE_URL)
             left = sr.me().get("budget")
             status.value = _note(f"Connected. Budget of this key: {left}", "#1a7f37")
             S["sr"] = sr
             panel.children = (sr_panel(sr, ready_made, default_lat, default_lon, show=False),)
         except Exception as exc:
-            status.value = _note(f"Could not connect: {_html.escape(str(exc))}. Check the key "
-                                 "and the address on your team card.", "#b00020")
+            status.value = _note(f"Could not connect: {_html.escape(str(exc))}. Check the "
+                                 "email address, or ask an instructor.", "#b00020")
         finally:
             go.disabled = False
     go.on_click(on_go)
-    ui = W.VBox([key, url, go, status, panel])
-    ui.key, ui.url, ui.go, ui.status, ui.panel = key, url, go, status, panel
+    ui = W.VBox([email, go, status, panel])
+    ui.email, ui.go, ui.status, ui.panel = email, go, status, panel
     UI["sr_connect"] = ui
     display(ui)
 

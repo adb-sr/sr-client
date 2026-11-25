@@ -30,8 +30,8 @@ Your team chooses a decision and checks whether super-resolved (SR) Sentinel-2 i
 * **Ready-made areas.** We prepared these before the workshop: dense city, city edge, small
   farms, quarries, fishponds and coast, a river and its flood plain. No key needed. ★ marks
   places that experts mapped, so we have measured results for them.
-* **Your own area.** Up to 2 km × 2 km. In part 2, type the API key and the service address
-  from your team card, check which Sentinel-2 images exist, and press **Send**. The service
+* **Your own area.** Up to 2 km × 2 km. In part 2, type your email address (the service gives you
+  a key for it), check which Sentinel-2 images exist, and press **Send**. The service
   takes 5 to 10 minutes.
 
 ## For organisers

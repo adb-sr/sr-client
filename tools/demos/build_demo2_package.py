@@ -128,7 +128,7 @@ def main():
         job.wait(quiet=True)
         images, valid = load_inputs(job)
         like = images["Stage 2"]
-        refs, buildings, roads = reference_maps(like)
+        refs, buildings, roads = reference_maps(like, p.get("iso", "PHL"))
         maps = {inp: landcover(model, images[inp]).astype("uint8") for inp in INPUTS}
 
         rows = score_rows(images, maps, refs, valid, own_model=not args.no_own_model)

@@ -97,14 +97,19 @@ md(rf"""
 **▶ Look.** Run the cell, choose the place you know best, and press **Send to the service**.
 The service first makes a free **estimate** (which Sentinel-2 images exist around the date,
 and what the job would cost) and then starts the job. All listed places were run before
-the workshop, so they come back quickly and cost nothing.
+the workshop, so they come back quickly and cost nothing. Under the button you then see the
+**main Sentinel-2 image** of your area: the first of the 8 images the model uses, at 10 m.
 
 | Place | What is there |
 |---|---|
 {place_rows}
 
+**Options** (closed by default) holds the date and three settings of the search: how cloudy
+an image may be, how many days around the date to search, and how clear each 320 m tile has
+to be. The listed places work with the defaults; change them to see what happens.
+
 Each area is a {AREA_KM} km square. *My own place* is the last entry in the menu: fill in a
-point and a date. It takes a few minutes longer and uses your budget, so start with a listed
+point, and a date under Options. It takes a few minutes longer and uses your budget, so start with a listed
 place if you are short of time. If you change the place later, run the cells of parts 2 to 5
 again.
 """)
@@ -123,14 +128,16 @@ print("  dials:", {k: v for k, v in model["params"].items() if k in ("tau", "nfe
 print("area:", area_around(LAT, LON, km=2))
 
 # the estimate is free: it searches the Sentinel-2 archive and runs nothing
-est = sr.estimate(area, DATE)
+options = my_options()                        # what you changed under "Options" ({} = defaults)
+print("options:", options or "the defaults")
+est = sr.estimate(area, DATE, **options)
 print(f"{est['tiles']} tiles, about ${est['estimated_usd']:.2f}; {len(est['scenes'])} Sentinel-2 "
       f"images between {est['search_window'][0]} and {est['search_window'][1]}")
 for s in est["scenes"][:5]:
     print("  ", s["date"][:10], s["id"])
 print("   ...")
 
-# the button then ran:   job = sr.submit(area, DATE)
+# the button then ran:   job = sr.submit(area, DATE, **options)
 print("job", job.id, job.refresh().status)
 
 explain("request")
@@ -163,7 +170,7 @@ for d, sid in zip(tile["dates"], tile["scene_ids"]):
     print("  ", d, sid)
 
 # all images the search found, and how cloudy each is over this area
-est = sr.estimate(area, DATE)
+est = sr.estimate(area, DATE, **my_options())
 cloudy = cloud_over_area([s["id"] for s in est["scenes"]], area)   # read from the archive
 plot_search(est, m, cloudy, DATE)
 
@@ -275,7 +282,7 @@ LAT, LON, DATE, area, job = picked()
 name, trial = my_experiment()                # the experiment you ran with the button
 
 # an experiment is the same request with other options
-print(f"{name}:  sr.submit(area, DATE, **{EXPERIMENTS[name]})")
+print(f"{name}:  sr.submit(area, DATE, **{ {**my_options(), **EXPERIMENTS[name]} })")
 for label, j in (("default", job), (name, trial)):
     p, cost = j.refresh().info["params"], j.info["cost"]["actual_usd"] or 0
     print(f"  {label:<30} tau {p.get('tau', 250)}, steps {p.get('nfe') or p.get('tau', 250)}, "
@@ -315,15 +322,19 @@ md(r"""
 **Near-infrared and vegetation.** The model also sharpens the near-infrared band, which our
 eyes cannot see. Plants reflect a lot of it. The false-colour image shows near-infrared as
 red; NDVI turns it into a vegetation index (green = dense vegetation).
+
+Both use **Stage 1**, not Stage 2. An index is a measurement, so truthful matters more than
+sharp: Stage 1 only combines what the satellite measured, while Stage 2 draws detail that is
+plausible but was not measured.
 """)
 code(r"""
 LAT, LON, DATE, area, job = picked()
-lr, s2 = load(job, "lr_reference.tif"), load(job, "stage2_sr.tif")
-show([view(lr, LAT, LON, 1000), view(s2, LAT, LON, 1000)],
-     ["Sentinel-2, false colour", "Stage 2, false colour"], bands=(4, 1, 2), ceiling=0.45,
+lr, s1 = load(job, "lr_reference.tif"), load(job, "stage1_sr.tif")
+show([view(lr, LAT, LON, 1000), view(s1, LAT, LON, 1000)],
+     ["Sentinel-2, false colour", "Stage 1, false colour"], bands=(4, 1, 2), ceiling=0.45,
      size=5.5)
 fig, axes = plt.subplots(1, 2, figsize=(11, 5))
-for ax, (title, da) in zip(axes, [("Sentinel-2, 10 m", lr), ("Stage 2, 2.5 m", s2)]):
+for ax, (title, da) in zip(axes, [("Sentinel-2, 10 m", lr), ("Stage 1, 2.5 m", s1)]):
     im = ax.imshow(view(ndvi(da), LAT, LON, 1000).values, cmap="RdYlGn", vmin=-0.2, vmax=0.8,
                    interpolation="nearest")
     ax.set_title(f"NDVI, {title}")

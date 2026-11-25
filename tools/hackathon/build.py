@@ -4,8 +4,9 @@
 
 The helper code (hk.py, then the ipywidgets controls in hk_widgets.py) is pasted into a
 hidden form cell of each notebook, so each notebook runs on its own in Colab with nothing but
-the data download. The controls act at once (Colab ships ipywidgets 7.7.1); test them by
-setting widget values in code (see UI in hk_widgets.py).
+the data download. Participants press Runtime > Run all once and then only use the controls,
+which act at once (Colab ships ipywidgets 7.7.1); nothing waits for input and nothing after
+part 3 shows a result before the team has placed its bet. Test with tools/hackathon/test_nb.py.
 """
 from pathlib import Path
 
@@ -44,7 +45,7 @@ def badge(name):
 
 # --------------------------------------------------------------------------- shared cells
 
-def header(name, title, question, minutes_note):
+def header(name, title, question, data_note):
     return [md(f"""
 # Mini-hackathon: {title}
 
@@ -52,32 +53,47 @@ def header(name, title, question, minutes_note):
 
 {badge(name)}
 
-**The question for your team:** {question}
+**Your team has a brief on its desk.** {question}
 
-There is no leaderboard. Your result is a **verdict** for a real decision in your agency:
-*deploy*, *pilot* or *don't use*, backed by the numbers from this notebook. "Super-resolution
-doesn't help here" is a perfectly good result.
+By 14:15, answer on one slide: **deploy**, **pilot** or **don't use**, with your numbers and
+your safeguards. There is no leaderboard. "Super-resolution doesn't help here" is a good answer.
 
-**How this notebook works.** All model predictions were computed before the workshop, so
-everything runs in a few seconds on a normal computer. You do not need a GPU. You may use any
-AI assistant you like to change the code.
+**No coding needed.** Everything was computed before the workshop. You press one button, then
+scroll, click and discuss.
 
-| Part | What you do | Time |
+| Part | What you do | When |
 |---|---|---|
-| 0–2 | Load the data, see what the model does on each input | 10 min |
-| 3 | Look at examples, including failures | 10 min |
-| 4 | Write down **your** scenario | 15 min |
-| 5–6 | The decision cell: does super-resolution change your decision? | main work |
-| 7–8 | Optional: improve the baseline, or try your own area | if time |
-| 9 | Numbers for your slide | 15 min |
+| 0 | Start the notebook with one click | 11:20 |
+| 1 | Choose your brief and make it yours | before lunch |
+| 2 | Look at the images | before lunch |
+| 3 | Place your bet, then see the result | 13:00 |
+| 4 | Which places, and who is left out? | 13:25 |
+| 5 | Is it worth the money? | 13:45 |
+| 6 | Your recommendation | 14:00, slide by 14:15 |
+| Going further | Map scores, your own code, your own area | only if time |
 
-{minutes_note}
+{data_note}
 """),
-            md("## 0. Setup\n\nRun the cells one by one (Shift+Enter), each once. The first one "
-               "holds the helper code; you do not need to read it. Most cells show **controls** "
-               "(menus, sliders, buttons, text fields): they act at once, so you do not need to "
-               "run the cell again after changing them. Your answers are saved as you type. If a "
-               "control seems to do nothing, run its cell again."),
+            md("""
+## 0. Start with one click
+
+1. In the top menu, choose **Runtime → Run all**.
+2. Colab warns that Google did not write this notebook. Choose **Run anyway**.
+3. Wait about a minute for the data, then scroll down.
+
+After that, use only the **controls**: menus, sliders, buttons and text fields. They act at
+once and save your answers. If a control does nothing, click the ▶ to the left of its cell.
+
+**Working online?** One person shares their screen and operates the controls. Give out four
+roles:
+
+| Role | Job |
+|---|---|
+| Decision-maker | speaks for the office in the brief |
+| Field lead | keeps the budget and the visits realistic |
+| Sceptic | asks "what if the map is wrong?" |
+| Rapporteur | fills the slide and presents |
+"""),
             code("# @title Helper functions (run this cell; you do not need to read it) { display-mode: \"form\" }\n"
                  + HELPERS, hidden=True)]
 
@@ -96,111 +112,152 @@ task
 
 
 INPUTS_MD = """
-**The inputs.** Every place in this dataset comes in up to four versions, and the same task
-model is applied to each:
+**Four kinds of image.** Every place comes in four versions. The same computer model reads each:
 
-| Name in this notebook | What it is |
-|---|---|
-| **Sentinel-2** | the free 10 m image, enlarged to 2.5 m pixels by plain interpolation (bicubic). This is the "do nothing" option. |
-| **SR stage 1** | our model's first stage: combines 8 Sentinel-2 images into one sharper 2.5 m image. Conservative: it does not invent texture. |
-| **SR stage 2** | the full model: stage 1 plus the diffusion refiner (τ = 250), which adds realistic texture. Sharper, but some detail is made up. |
-| **Real high-res** | the real commercial image resampled to 2.5 m: the ceiling, what you would get if you bought imagery. |
+| Name | What it is | Cost |
+|---|---|---|
+| **Sentinel-2** | The free 10 m satellite image, simply enlarged. The "do nothing" option. | free |
+| **SR stage 1** | Super-resolution, careful: blends 8 Sentinel-2 images into one sharper image. Invents nothing. | computing only |
+| **SR stage 2** | Super-resolution, full: adds realistic texture with AI. Sharper, but some detail is made up. | computing only |
+| **Real high-res** | A commercial image, as if you had bought it. The best one can hope for. | paid per km² |
 """
 
 
-def scenario_cells():
-    return [md("""
-## 4. Your scenario
+def mission_cells(extra=""):
+    return [md(f"""
+## 1. Your brief
 
-Before you look at any decision numbers, agree as a team on **a real decision** this map would
-feed. Be concrete; the numbers in part 5 only mean something for a concrete decision.
+This is a **mock brief**: the office and the numbers are invented, the kind of decision is real.
+Choose the one closest to your work, or write your own. {extra}
 
-* **Who decides**, and what do they decide?
-* **Budget**: how many places can they act on (visits, audits, teams, km² of map updates)?
-* **What counts as a hit**: when is a place worth the visit?
-* **What does a wasted visit cost**, and **what does a missed place cost**? Money, days, people,
-  or harm. Rough is fine; the ratio matters most.
+Then make it yours. Change the fields until they describe a decision someone in your agency
+really makes:
 
-Type your answers into the fields: they are saved as you type and end up on your slide card in
-part 9. The grey text is an example; if you have no idea of your own, the button copies the
-example into the empty fields, and you change what does not fit your agency.
+* **Who decides**, and what?
+* **Budget**: how many places can they act on?
+* **Hit**: when is a place worth the visit?
+* **Errors**: what does a wasted visit cost, and a missed place? Rough numbers are fine; the
+  ratio matters.
+
+Everything below follows your choice.
 """),
-            code("scenario(task)")]
+            code("mission(task)")]
 
 
-def overlap_cells():
-    return [md("""
-## 6. Did super-resolution change *which* places you picked?
+def decision_cells(place, score, check, extra=""):
+    return [md(f"""
+## 3. Place your bet, then see the result
 
-A better score does not always mean a different decision. The table shows how many of the
-places picked with one input are also picked with another (100 % = the same list). Then look at
-the places themselves: green frames are hits, red frames are wasted visits. Choose the input
-whose picks you want to see; below them are its most confident false alarms and the clear hits
-it would not visit. Everything here follows the settings of part 5.
+**How the count works.** The map is cut into square {place}. For each one, the model gives a
+score: {score}. You visit the **highest-scoring {place}**, up to your budget. Then {check} show
+which visits were **hits**.
+
+1. **Check the settings.** They come from your brief.
+2. **Place your bet.** How many of your visits will be hits with each kind of image?
+3. **Read the result.** After that, any change to a setting updates everything below.
+{extra}"""),
+            code("decision_panel(task)"),
+            md("""
+**Reading the table.** *Hits*: visits that found what you were looking for. *Wasted visits*: the
+rest of your budget. *Missed places*: hits you did not visit. *Cost*: wasted visits and missed
+places, each times its cost. *Random*: no map at all. *Perfect*: the best your budget allows.
+
+**Other budgets.** Does the advantage hold with fewer or more visits?
 """),
+            code("sweep_view()")]
+
+
+def picks_cells(extra=""):
+    return [md(f"""
+## 4. Which places, and who is left out?
+
+A better score does not always change the decision, and an average hides who is missed.
+
+* **Where the visits go.** An area with many hits and no visits is left out.
+* **The same places?** How much the pick lists of two kinds of image overlap.
+* **The places themselves.** Green frame: hit. Red frame: wasted visit. Below them: the most
+  confident false alarms, and the clear hits nobody visits. For each false alarm, ask: would
+  acting on it harm someone?
+{extra}"""),
             code("picks_view()")]
 
 
+def cost_cells(extra=""):
+    return [md(f"""
+## 5. Is it worth the money?
+
+Free, super-resolved and real images differ in price by a factor of about a thousand. Here you
+see your result next to the imagery bill for your **whole** area.
+
+Also try a **mixed strategy**: a cheap kind of image screens everything, you buy real images
+only for the places it flags, and you choose your visits there. Change the share you buy. Then
+screen with plain Sentinel-2: does super-resolution earn its place?
+{extra}"""),
+            code("cost_view()")]
+
+
 SLIDE_MD = """
-## 9. Numbers for your slide
+## 6. Your recommendation
 
-Choose your verdict below. The card collects your scenario (part 4), the decision settings
-(part 5) and your answers; it follows any change by itself. The button downloads the chart.
+Answer the brief: choose a recommendation, say how you would use the map, and tick your
+safeguards. The card collects everything for your slide and updates by itself.
 
-**Your slide** (one slide, template from the facilitators) has four parts:
-1. **Scenario**: who decides, budget, what a hit is, what errors cost.
-2. **Numbers**: hits for Sentinel-2, SR stage 1, SR stage 2 (and real high-res if you have it).
-3. **Verdict**: *deploy*, *pilot* or *don't use*, and for which decision.
-4. **What would change your mind**: data, validation, partners, costs.
+**Your slide** has four parts:
+1. **The decision**: who decides, budget, hit, cost of errors.
+2. **The numbers**: hits per kind of image, and the cost.
+3. **The recommendation**: *deploy*, *pilot* or *don't use*.
+4. **Safeguards**, and what would change your mind.
 
-Questions to discuss before you write the verdict:
-* Would you act on the map directly, or only use it to decide where to look?
-* Who checks the output, and what would make them stop trusting it?
-* What is missing to run this for real: data, validation, partners?
+Before you choose, the sceptic asks:
+* Would you act on the map, or only use it to decide where to look?
+* Who checks a flagged place?
+* Who is harmed by a false alarm, and who by a miss?
+* What is missing to run this for real?
 """
+
+
+FURTHER_MD = """
+---
+# Going further (only if you have time)
+
+Nothing below changes your recommendation.
+"""
+
+
+def code_cells(ideas, example):
+    return [md(f"""
+## B. Change the code
+
+For teams with a programmer or an AI assistant. Ideas:
+{ideas}
+
+`current()` returns the decision of part 3 as it is set now. `decide`, `plot_decision`, `sweep`,
+`visits_needed` and `screen_then_confirm` work on anything of the same shape. `peek(...)` shows
+a result only after you have revealed part 3.
+"""),
+            code(example)]
 
 
 def api_cells(places_code, note, lat, lon):
     return [md(f"""
-## 8. Optional: super-resolve an area of your own
+## C. Super-resolve an area of your own
 
-With the SR service you can make stage 1 and stage 2 images for any area up to 5 km × 5 km.
-Your API key (`srk_...`) and the service address are on your team card; in Colab, store them
-under **Secrets** (key icon on the left) as `SR_API_KEY` and `SR_API_URL`, or paste them when
-asked. The ready-made areas were run before the workshop, so they come back in seconds and cost
-nothing. A new area takes 3–6 minutes, and the button waits until it is done. You can add your
-own areas to `READY_MADE`, or choose "My own place" in the menu.
+The SR service makes stage 1 and stage 2 images of any area up to 5 km × 5 km. Type the API key
+(`srk_...`) and the service address from your team card, then press **Connect**. The ready-made
+areas come back in seconds and cost nothing. A new area takes 3–6 minutes. Choose "My own
+place" to try a place you know.
 
 {note}
 """),
-            code('%pip install -q "sr-client[geo,viz] @ git+https://github.com/adb-sr/sr-client@v0.1.0"'),
-            code("""
-import getpass
-
-from sr_client import SRClient, area_around
-
-
-def secret(name, prompt):
-    if os.environ.get(name):
-        return os.environ[name]
-    try:
-        from google.colab import userdata
-        return userdata.get(name)
-    except Exception:
-        return getpass.getpass(prompt)
-
-
-sr = SRClient(secret("SR_API_KEY", "API key (srk_...): "), url=secret("SR_API_URL", "Service URL: "))
-sr.me()["budget"]
-"""),
             code(places_code),
-            code(f"sr_panel(sr, READY_MADE, default_lat={lat}, default_lon={lon})")]
+            code(f"sr_connect(READY_MADE, default_lat={lat}, default_lon={lon})")]
 
 
 FOOTER = """
 ---
 Contains modified Copernicus Sentinel data. Super-resolution: ADB SSTA model (stage 1 Sen4x,
-stage 2 diffusion refiner). Workshop material: please do not redistribute the data packages.
+stage 2 diffusion refiner). The briefs are invented for this workshop. Workshop material:
+please do not redistribute the data packages.
 """
 
 
@@ -210,112 +267,79 @@ def ifs():
     name = "hackathon_informal_settlements"
     cells = header(
         name, "informal settlements in Metro Manila",
-        "Would you use super-resolved Sentinel-2 to decide **where to send survey teams** to find "
-        "and verify informal settlements, and how?",
-        "*Data: expert-drawn informal-settlement outlines for 40 sample tiles (about 20 km²) in "
-        "Manila South and Quezon City.*")
+        "A housing office must decide **where to send its field teams** to find informal "
+        "settlements. It cannot afford new commercial images of the whole city. Would you use "
+        "super-resolved Sentinel-2 for this, and how?",
+        "*Data: informal-settlement outlines drawn by experts for 40 sample tiles (about "
+        "20 km²) in Manila South and Quezon City.*")
     cells += [load_cell("ifs_manila", extras=("ifs_manila_hr",)),
+              *mission_cells("The first is for a housing office, the second for a space "
+                             "agency that serves local governments."),
               md(f"""
-## 1. The data
+## 2. Look at the images
 
-Experts outlined informal settlements on real high-resolution images (Google satellite imagery,
-about 0.5 m). The tiles were chosen to contain informal settlements of different sizes, so
-settlements are much more common here than in the city as a whole.
+Experts outlined informal settlements on real high-resolution images. The sample tiles were
+chosen to contain settlements, so settlements are far more common here than in the city as a
+whole.
 
-Six task models were trained on the real high-resolution images (resampled to 2.5 m). They have
-**never seen a super-resolved image**: we simply give them each input and see what they find.
-This is the "reuse a model you already have" path from Session 3.
+Six computer models learned to find informal settlements on real high-resolution images. They
+have **never seen a super-resolved image**: we show them each kind of image and see what they
+find. This is the "reuse a model you already have" path from Session 3.
 {INPUTS_MD}
-The real high-resolution images are licensed for this workshop only. If they did not
-download, everything still works: you just will not see those pictures.
-"""),
-              code("""
-# The tile with the most informal settlement: images (top) and what the models flag (bottom)
-example = task.scenes.informal_share.idxmax()
-ifs_show(task, example)
-"""),
-              md("""
-## 2. How good is the model on each input?
+The real images are licensed for this workshop only. If they did not download, everything
+still works; you just will not see those pictures.
 
-The usual way to judge a map: pixel by pixel against the expert outlines. **F1** combines false
-alarms and misses: 0 % = nothing right, 100 % = perfect. "Lowest" and "highest" show the spread
-over the six task models; "paper" is the value in our paper, which scores overlapping patches
-and so differs slightly.
-"""),
-              code("ifs_f1_table(task)"),
-              md("""
-**What this says.** On plain Sentinel-2 the models find almost nothing; on super-resolved images
-they find about half of what they find on real high-resolution images. Stage 2, with its
-synthesised roof texture, does best. But a pixel score is not a decision. The rest of the
-notebook asks whether these differences change **where you would send people**.
-
-## 3. Look around, including failures
-
-Choose a tile in the menu (sorted from most to least informal settlement); the picture follows
-at once. Top row: what the model sees. Bottom row: orange = flagged as informal (pixels where the
-six models' mean probability is above the threshold, 0.5 unless you move the slider), black
-line = expert outline. You can also look at one model at a time. Look for:
-* places flagged on super-resolved images but not on real images: **invented** settlements?
-* settlements missed everywhere: what do they look like?
+**Look around, including failures.** Choose a tile (sorted from most to least informal
+settlement). Top row: what the model sees. Bottom row: orange = flagged as informal, black
+line = the experts' outline. Look for:
+* places flagged on super-resolved images but not on real ones: **invented** settlements?
+* settlements missed on every image: what do they look like?
+* Would *you* find the settlement on the Sentinel-2 image?
 """),
               code("explore(task)"),
-              *scenario_cells(),
-              md("""
-## 5. The decision cell
+              *decision_cells(
+                  "blocks", "the share of the block it flags as informal settlement",
+                  "the experts' outlines",
+                  "\n*Hits* is the mean of the six models. The *range* shows the unluckiest "
+                  "and the luckiest model; in practice you have only one.\n"),
+              *picks_cells(),
+              *cost_cells(),
+              md(SLIDE_MD),
+              code("slide_card()"),
+              md(FURTHER_MD + """
+## A. What papers report: the map score
 
-The map is cut into square blocks. For every block and every input, the models' map gives a
-score: the share of the block flagged as informal. You visit the **highest-scoring blocks**, up
-to your budget. Afterwards, the expert outlines tell us which visits were hits.
-
-Set the controls to match your scenario: the chart and the table follow at once, and so do
-parts 6 and 9.
+Papers judge a map pixel by pixel against the experts' outlines. **F1** combines false alarms
+and misses: 0 % = nothing right, 100 % = perfect. "Lowest" and "highest" show the spread over
+the six models. "Paper" is the value in our paper, which scores overlapping patches and so
+differs slightly. Compare with part 3: does the best map score also give the best decision?
 """),
-              code("decision_panel(task)"),
-              md("""
-**How to read it.** *Hits* is the mean over the six task models; *range* shows the worst and
-best model, a reminder that a single model can be lucky or unlucky. *Random* is what you would
-expect without any map; *perfect* is the best your budget allows. *Cost* = wasted visits ×
-their cost + missed places × their cost, in your units.
-
-Does the advantage hold for a smaller or bigger budget? (This chart follows part 5 too.)
-"""),
-              code("sweep_view()"),
-              *overlap_cells(),
-              md("""
-## 7. Optional: improve the baseline
-
-Only if you have time, and only if it helps your decision. Ideas:
+              code("ifs_f1_table(task)"),
+              *code_cells("""
 * **Threshold**: `ifs_units(task, cell_m=100, thr=0.3)` flags more pixels. Does a lower
   threshold help the Sentinel-2 or stage 1 inputs? (worked example in the next cell)
 * **Score**: rank blocks by the mean probability instead of the share above the threshold
   (the arrays are in `task.arr(tile, "prob_stage2")`, values 0–255, one slice per model).
 * **One model or six?** Use `preds[key][m]` for model `m` and see how much the decision depends
   on the model you happen to have.
-* **Combine inputs**: e.g. visit a block only if both stage 1 and stage 2 flag it.
-
-`current()` gives the decision of part 5 as it is set now; `decide`, `plot_decision` and
-`sweep` work on anything of the same shape.
-"""),
-              code("""
-units, preds, hit, res = current()   # the decision of part 5, as it is set now
+* **Combine inputs**: e.g. visit a block only if both stage 1 and stage 2 flag it.""", """
+units, preds, hit, res = current()   # the decision of part 3, as it is set now
 
 # Worked example: a lower threshold (0.3) with the same block size, hit rule and budget
 block_m = int(units["size"].iloc[0] * task.px)
 units_low, preds_low = ifs_units(task, cell_m=block_m, thr=0.3)
 hit_low = units_low.truth.values >= S["hit_at"]
-decide(units_low, preds_low, hit_low, S["budget"], S["cost_wasted"], S["cost_missed"], labels=labels)
+peek(decide(units_low, preds_low, hit_low, S["budget"], S["cost_wasted"], S["cost_missed"], labels=labels))
 """),
-              *api_cells('''
+              *api_cells("""
 READY_MADE = {
     # name: area, date and options; run before the workshop, so they come back fast
     "Tondo and Baseco, Manila": dict(area=area_around(14.5960, 120.9620, km=3), date="2026-03-15"),
     "Payatas, Quezon City": dict(area=area_around(14.7130, 121.1000, km=3), date="2026-03-15"),
     "Manila South test area": dict(area=area_around(14.5560, 121.0136, km=2), date="2025-06-01"),
 }
-''', "There is no informal-settlement model in this part (its weights are not public). Use it to "
+""", "There is no informal-settlement model in this part (its weights are not public). Use it to "
      "look: would *you* spot the settlements you know on stage 1 or stage 2?", 14.5960, 120.9620),
-              md(SLIDE_MD),
-              code("slide_card()"),
               md(FOOTER + "\nInformal-settlement outlines: ADB technical assistance, expert annotators. "
                  "Real high-resolution images: Google satellite imagery, workshop use only.")]
     return name, cells
@@ -323,111 +347,79 @@ READY_MADE = {
 
 # --------------------------------------------------------------------------- land cover (Hanoi)
 
-HANOI_INPUTS_MD = INPUTS_MD.replace("the real commercial image resampled",
-                                    "the real Pléiades Neo image resampled")
+HANOI_INPUTS_MD = INPUTS_MD.replace("A commercial image,", "A commercial image (Pléiades Neo),")
 
 
 def hanoi():
     name = "hackathon_land_cover"
     cells = header(
         name, "land cover around Hanoi",
-        "Would you use super-resolved Sentinel-2 to decide **which places to inspect** (for example "
-        "open construction sites that raise dust, new buildings on farmland, or missing roads), "
-        "and how?",
-        "*Data: 92 tiles of 640 m × 640 m around Hanoi, Vietnam (about 38 km²), where experts "
-        "mapped seven kinds of land cover on 0.5 m Pléiades Neo images. Hanoi's mix of dense "
-        "villages, rice fields, ponds and building sites looks much like the edges of Metro Manila, "
-        "Bulacan or Pampanga.*")
+        "A city office must decide **which places to inspect or map first**: dusty building "
+        "sites, houses on protected farmland, roads missing from the map, or trees to protect. "
+        "Would you use super-resolved Sentinel-2 for this, and how?",
+        "*Data: 92 tiles of 640 m × 640 m around Hanoi, Viet Nam (about 38 km²), where experts "
+        "mapped seven kinds of land cover. Its mix of dense villages, rice fields, ponds and "
+        "building sites is typical of the growing edge of many Asian cities, including Metro "
+        "Manila, Bulacan and Pampanga.*")
     cells += [load_cell("hanoi_landcover", extras=("hanoi_landcover_hr",)),
+              *mission_cells("The four briefs use the same map for different decisions, and "
+                             "the answer differs between them."),
               md(f"""
-## 1. The data
+## 2. Look at the images
 
-Experts mapped seven classes on real high-resolution images (Pléiades Neo, 0.5 m): **building,
-road, water, tree, low vegetation, cropland, bare soil or sand**. About a third of the pixels
-were left unlabelled (white in the expert map); they do not count anywhere.
+Experts mapped seven kinds of land cover on real high-resolution images: **building, road,
+water, tree, low vegetation, cropland, bare soil or sand**. About a third of the ground is
+unlabelled (white in the expert map) and never counts.
 
-One task model was trained on the real high-resolution images (resampled to 2.5 m). It has
-**never seen a super-resolved image**: we give it each input and see what it draws. This is the
+One computer model learned to draw this map from real high-resolution images. It has **never
+seen a super-resolved image**: we show it each kind of image and see what it draws. This is the
 "reuse a model you already have" path from Session 3.
 {HANOI_INPUTS_MD}
-The real high-resolution images are licensed for this workshop only. If they did not
-download, everything still works: you just will not see those pictures.
-"""),
-              code("""
-# A well-labelled tile with much bare soil and sand: images (top), what the model draws (bottom)
-example = task.scenes[task.scenes.valid_share >= 0.8].share_6.idxmax()
-lc_show(task, example, target=6)
-"""),
-              md("""
-## 2. How good is the model on each input?
+The real images are licensed for this workshop only. If they did not download, everything
+still works; you just will not see those pictures.
 
-Pixel by pixel against the expert map. **IoU** (intersection over union) per class: 0 = nothing
-right, 1 = perfect. *mIoU* is the mean over the seven classes; "paper" is the value in our paper.
-"""),
-              code("lc_metric_table(task)"),
-              md("""
-**What this says.** Super-resolution closes about two thirds of the gap between Sentinel-2 and
-real images (mIoU 0.32 → 0.47; real 0.57), and stage 2, with its synthesised texture, does best.
-Look at the columns, though: trees, water and buildings gain the most, while bare soil and sand
-barely move (0.19 → 0.25; real 0.34). A pixel score is not a decision. The rest of the notebook
-asks whether these differences change **where you would send inspectors**, and the answer is not
-always the one this table suggests.
-
-## 3. Look around, including failures
-
-Choose a class to sort the tiles by, then a tile; the picture follows at once. Top row: what the
-model sees. Bottom row: the land cover it draws, and the expert map on the right; the black line
-outlines the chosen class in the expert map. Look for:
-* buildings, roads or bare soil drawn on super-resolved images but not on real ones: **invented**?
+**Look around, including failures.** Choose a land cover to sort the tiles by, then a tile. Top
+row: what the model sees. Bottom row: the land cover it draws, with the expert map on the
+right. The black line outlines your land cover in the expert map. Look for:
+* buildings, roads or bare soil drawn on super-resolved images but not on real ones:
+  **invented**?
 * small things (a lane, a house in the fields, a building site) that only the real image shows;
 * river sandbanks drawn as bare soil: a dust source, a sand mine, or a false alarm for you?
 """),
               code("explore(task)"),
-              *scenario_cells(),
-              md("""
-## 5. The decision cell
+              *decision_cells(
+                  "cells", "the share of the cell it draws as the land cover you look for",
+                  "the expert map",
+                  "\nThere is one model here, so the table shows no range. Later, try the "
+                  "other briefs in part 1: super-resolution changes some decisions, not "
+                  "others.\n"),
+              *picks_cells(),
+              *cost_cells(),
+              md(SLIDE_MD),
+              code("slide_card()"),
+              md(FURTHER_MD + """
+## A. What papers report: the map score
 
-The map is cut into square cells. For every cell and every input, the model's map gives a
-score: the share of the cell it draws as the land cover you look for. You inspect the
-**highest-scoring cells**, up to your budget. Afterwards, the expert map tells us which
-inspections were hits.
-
-Set the controls to match your scenario: the chart and the table follow at once, and so do
-parts 6 and 9. Try other classes too: some decisions change with super-resolution, others do
-not.
+Papers judge a map pixel by pixel against the expert map. **IoU** (intersection over union)
+per land cover: 0 = nothing right, 1 = perfect. *mIoU* is the mean of the seven. "Paper" is the
+value in our paper. Compare with part 3: the land cover that gains most pixel by pixel is not
+always the one where the decision changes most.
 """),
-              code("decision_panel(task)"),
-              md("""
-**How to read it.** *Hits* = inspections of a cell that meets your hit rule. *Random* is what
-you would expect without any map; *perfect* is the best your budget allows. *Cost* = wasted
-inspections × their cost + missed places × their cost, in your units. There is one task model
-here, so there is no range.
-
-Does the advantage hold for a smaller or bigger budget? (This chart follows part 5 too.)
-"""),
-              code("sweep_view()"),
-              *overlap_cells(),
-              md("""
-## 7. Optional: improve the baseline
-
-Only if you have time, and only if it helps your decision. Ideas:
-* **Combine classes**: e.g. buildings on farmland (worked example in the next cell).
+              code("lc_metric_table(task)"),
+              *code_cells("""
+* **Combine classes**: e.g. buildings near water, or bare soil next to roads (the worked example
+  in the next cell rebuilds "buildings in farmland" by hand, with your own shares).
 * **Mix inputs**: e.g. inspect a cell only if both stage 1 and stage 2 draw bare soil there.
 * The predicted maps are in `task.arr(tile, "pred_stage2")` (class numbers 0–6, in the order of
-  the table in part 2) if you want to compute your own score.
+  the table in part A) if you want to compute your own score.""", """
+units, preds, hit, res = current()   # the decision of part 3, as it is set now
 
-`current()` gives the decision of part 5 as it is set now; `decide`, `plot_decision` and
-`sweep` work on anything of the same shape.
-"""),
-              code("""
-units, preds, hit, res = current()   # the decision of part 5, as it is set now
-
-# Worked example: buildings on farmland (cells with >= 5 % buildings and >= 30 % cropland)
+# Worked example: buildings in farmland, by hand (cells with >= 5 % buildings and >= 30 % cropland)
 u_b, p_b = lc_units(task, cell_m=80, target=0)
 u_c, p_c = lc_units(task, cell_m=80, target=5)
 hit_bf = (u_b.truth.values >= 0.05) & (u_c.truth.values >= 0.3)
 score = {k: p_b[k] * (p_c[k] >= 0.3) for k in p_b}
-decide(u_b, score, hit_bf, 20, labels=labels)
+peek(decide(u_b, score, hit_bf, 20, labels=labels))
 """),
               *api_cells("""
 READY_MADE = {
@@ -437,8 +429,6 @@ READY_MADE = {
 }
 """, "There is no land-cover model in this part. Use it to look: would *you* spot the building "
      "sites, sand yards or new roads you know on stage 1 or stage 2?", 21.0787, 105.7822),
-              md(SLIDE_MD),
-              code("slide_card()"),
               md(FOOTER + "\nLand-cover labels and Pléiades Neo images: benchmark of Retnanto et al. "
                  "(2026, IEEE JSTARS). Real high-resolution images: Pléiades Neo (Airbus), workshop "
                  "use only.")]
@@ -451,110 +441,83 @@ def ai4():
     name = "hackathon_field_boundaries"
     cells = header(
         name, "field boundaries of smallholder farms",
-        "Would you use super-resolved Sentinel-2 to find **the most fragmented smallholder "
-        "farmland** for a farm-support programme, and how?",
-        "*Data: AI4SmallFarms benchmark, 10 test areas of about 5 km × 5 km in Vietnam and "
+        "An agriculture office must decide **which areas its teams visit first** to reach "
+        "small farms. It has no map of the fields. Would you use super-resolved Sentinel-2 for "
+        "this, and how?",
+        "*Data: AI4SmallFarms benchmark, 10 areas of about 5 km × 5 km in Viet Nam and "
         "Cambodia, with 51,062 field outlines drawn by experts. Fields average under one hectare, "
         "much like rice and corn farms in Central Luzon or Mindanao.*")
     cells += [load_cell("ai4_fields"),
+              *mission_cells("The first looks for small farms; the second only needs a "
+                             "count."),
               md("""
-## 1. The data
+## 2. Look at the images
 
-Experts drew every field in 10 areas. There are **no real high-resolution images** in this
-dataset, so this task works differently from the other two: a separate field-boundary model was
-**trained on each input** (three times, with different random starts), and each one draws the
-fields it sees. This is the "train a model on the images you will use" path from Session 3.
+Experts drew every field in 10 areas. This dataset has **no real high-resolution images**, so
+it works differently from the other two tasks: a separate computer model was **trained on each
+kind of image**, three times each to see how much luck is involved. Each draws the fields it
+sees. This is the "train a model on the images you will use" path from Session 3.
 
-| Name in this notebook | What it is |
-|---|---|
-| **Sentinel-2** | the free 10 m image (median of 8 clear dates), enlarged to 2.5 m pixels |
-| **SR stage 1** | our model's first stage, from the same 8 dates. Conservative: no invented texture. |
-| **SR stage 2** | the full model (τ = 250): adds realistic texture, some of it made up |
+| Name | What it is | Cost |
+|---|---|---|
+| **Sentinel-2** | The free 10 m satellite image (typical value of 8 clear days), simply enlarged. The "do nothing" option. | free |
+| **SR stage 1** | Super-resolution, careful: blends the same 8 images into one sharper image. Invents nothing. | computing only |
+| **SR stage 2** | Super-resolution, full: adds realistic texture with AI. Sharper, but some detail is made up. | computing only |
+
+**Look around, including failures.** Choose an area and a window size, then move the sliders.
+Top row: the images, with the experts' field outlines in red. Bottom row: the fields each model
+draws, in green. Look for fields split in two or merged with their neighbours, and for the hazy
+area `46_vietnam`. The three trained models of each kind of image can differ: compare them.
 """),
-              code("""
-# A 1 km window in Cambodia: reference fields (red, top) and the fields each model draws (green, bottom)
-ai4_show(task, "16_cambodia", y0=800, x0=800, size=400)
-"""),
-              md("""
-## 2. How good is the model on each input?
+              code("explore(task)"),
+              *decision_cells(
+                  "squares", "the **number of small fields** it draws in the square (a field "
+                  "counts where its centre lies)", "the experts' outlines",
+                  "\n*Hits* is the mean of the three trained models; the *range* shows the "
+                  "worst and the best. A new square or field size takes about 15 seconds the "
+                  "first time.\n"),
+              *picks_cells("\nThe first table has one row per area. Look at `46_vietnam`, and "
+                           "at areas that get no visit from any kind of image.\n"),
+              *cost_cells("\nThis dataset has no real high-resolution images, so the mixed "
+                          "strategy cannot be tested here. The bill is shown for scale.\n"),
+              md(SLIDE_MD),
+              code("slide_card()"),
+              md(FURTHER_MD + """
+## A. What papers report: the map score
 
-A reference field counts as **found** when a drawn field overlaps it well (IoU > 0.5). **Field
-F1** combines missed and invented fields (0 = nothing right, 1 = perfect). The second line is the
-share of **small fields** (below 1,000 m²) found. Computed when the data package was built, from
-the same files you have.
+A field counts as **found** when a drawn field overlaps it well (IoU > 0.5). **Field F1**
+combines missed and invented fields (0 = nothing right, 1 = perfect). The second line is the
+share of **small fields** (under 1,000 m²) found. Stage 1 finds the most fields; the invented
+texture of stage 2 adds edges that are not field boundaries.
 """),
               code("""
 pd.DataFrame(task.meta["metric_table"]).assign(input=lambda d: d.input.map(labels)).pivot(
     index="input", columns="metric", values="value").round(3)
 """),
               md("""
-**What this says.** Stage 1 finds the most fields and nearly doubles the share of small fields
-found. Stage 2 is in between: its invented texture adds edges that are not field boundaries. All
-inputs miss most small fields.
-
-A simpler question many programmes need answered: **how many farms are there?** Below, the number
-of fields each model draws per area, against the reference.
+Many programmes only need a count: **how many farms are there?** Below, the number of fields
+each model draws per area, against the experts' count. A count can be right for the wrong
+reason: one field split in two and two fields merged still give the right number.
 """),
               code("ai4_tile_counts(task)"),
-              md("""
-## 3. Look around, including failures
-
-Choose an area, a window size and move the sliders; the picture follows at once. Look for fields
-that are split in two, or merged with their neighbours, and for the hazy area `46_vietnam`, where
-plain Sentinel-2 nearly fails. The three trained models (seeds) of each input can differ: compare
-them.
-"""),
-              code("explore(task)"),
-              *scenario_cells(),
-              md("""
-## 5. The decision cell
-
-The areas are cut into squares. For every square and every input, the model's fields give a
-score: the **number of small fields** in the square (counted by the field's centre). You visit
-the **highest-scoring squares**, up to your budget. Afterwards, the expert outlines tell us which
-visits were hits.
-
-Set the controls to match your scenario: the chart and the table follow at once, and so do
-parts 6 and 9. A new square size or field size takes about 15 seconds the first time.
-"""),
-              code("decision_panel(task)"),
-              md("""
-**How to read it.** *Hits* is the mean over the three trained models; *range* shows the worst
-and best. *Random* is what you would expect without any map; *perfect* is the best your budget
-allows. Choose **all fields** to count every field instead of the small ones.
-
-Does the advantage hold for a smaller or bigger budget? (This chart follows part 5 too.)
-"""),
-              code("sweep_view()"),
-              *overlap_cells(),
-              md("""
-## 7. Optional: improve the baseline
-
-Only if you have time, and only if it helps your decision. Ideas:
+              *code_cells("""
 * **Ignore tiny fields**: `ai4_units(task, cell_m=500, small_m2=2500, min_px=64)` drops drawn
   fields under 400 m², which are often fragments of one field.
 * **Seeds**: `preds[key][s]` is the model trained with seed `s`. How much does your decision
   depend on which training run you happen to have?
 * **Area, not count**: score squares by the share of their area in small fields.
 * The boundary-probability maps are in `task.arr(area, "prob_stage1_s0")` if you want to draw
-  your own fields.
-
-`current()` gives the decision of part 5 as it is set now; `decide`, `plot_decision` and
-`sweep` work on anything of the same shape.
+  your own fields.""", """
+units, preds, hit, res = current()   # the decision of part 3, as it is set now
+units.drop(columns="truth").head()
 """),
-              code("""
-units, preds, hit, res = current()   # the decision of part 5, as it is set now
-units.head()
-"""),
-              *api_cells('''
+              *api_cells("""
 READY_MADE = {
     "Nueva Ecija rice farms (Science City of Munoz)": dict(area=area_around(15.7150, 120.9050, km=3), date="2026-03-15"),
     "Nueva Ecija (as in practical demonstration 2)": dict(area=area_around(15.5784, 120.9726, km=2), date="2026-03-15"),
 }
-''', "There is no field model in this part. Use it to look: are the boundaries you know visible on "
+""", "There is no field model in this part. Use it to look: are the boundaries you know visible on "
      "stage 1? Does stage 2 draw boundaries that are not there?", 15.7150, 120.9050),
-              md(SLIDE_MD),
-              code("slide_card()"),
               md(FOOTER + "\nAI4SmallFarms (Persello et al. 2023): CC BY 4.0.")]
     return name, cells
 

@@ -2,8 +2,8 @@
 
 [Open the notebook in Colab](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/hackathon/field_boundaries/hackathon_field_boundaries.ipynb)
 
-**Question:** would you use super-resolved Sentinel-2 to find the most fragmented smallholder
-farmland for a farm-support programme, and how?
+**Question:** would you use super-resolved Sentinel-2 to decide which areas your teams visit
+first to reach small farms, and how?
 
 ## The data
 
@@ -29,26 +29,23 @@ farmland for a farm-support programme, and how?
 A field counts as found when a drawn field overlaps it well (IoU > 0.5). Stage 1 is best; the
 invented texture of stage 2 adds edges that are not field boundaries.
 
-## Example scenario (use it if you have none of your own)
+## The briefs (mock: the kind of decision is real, the office and numbers are invented)
 
-> **Department of Agriculture regional office, smallholder support programme.** Extension
-> workers visit areas with many small farms to enrol them in a registry and a support
-> programme. **Budget:** 30 visits, one 500 m × 500 m square each. **Hit:** a square with at
-> least 30 fields smaller than 0.25 ha. **A wasted visit** costs one extension-worker day.
-> **A missed square** means about 30 smallholders not enrolled this season, worth about two
-> worker-days.
+| Brief | Decision | Settings |
+|---|---|---|
+| **Which villages get the farmer-registry teams?** (department of agriculture) | Which areas extension workers visit to enrol small farms | 30 visits, 500 m squares, hit = at least 30 fields under 0.25 ha |
+| **Where does the farm census need a second enumerator?** (statistics office) | Which 1 km squares get a second enumerator | 20 squares, hit = at least 200 parcels of any size |
 
-Questions to sharpen it:
-- Do you need to know **where** the small farms are, or **how many** there are (for budgeting)?
-  The notebook also shows the field count per area against the reference.
-- Would a 10 m map plus local knowledge be enough? What would the extension worker do
-  differently with a 2.5 m map?
-- Who would check the boundaries, and how often do they change (season, inheritance, sales)?
+Or write your own. Questions to sharpen it:
+- Do you need to know **where** the small farms are, or only **how many** there are?
+- Would a 10 m map plus local knowledge be enough?
+- Who would check the boundaries, and how often do they change?
 
 ## Things to watch
 
 - Area `46_vietnam` is a hazy composite: plain Sentinel-2 nearly fails there (455 fields drawn
-  against 6,130), while both SR inputs cope. Hazy seasons matter.
+  against 6,130), while both SR inputs cope. Part 4 of the notebook shows what that means: no
+  visit goes there with Sentinel-2.
 - Counts can be right for the wrong reason: one field split in two plus two fields merged into
   one still gives the right count.
 - The models were trained on these regions. A model for the Philippines would need Philippine

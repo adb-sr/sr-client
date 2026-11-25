@@ -8,8 +8,8 @@
 | `d1_widgets.py` | the Demo 1 parts: place menu and send button, viewers with sliders, experiment button, result card; `picked()` and the notes for the "Under the hood" cells |
 | `build_demo1.py` | → `notebooks/demo1_super_resolution.ipynb`: each part is a one-line cell for everyone, a collapsed "Under the hood" cell with the plain client code, and a question; "Going deeper" (plain code, Cebu) at the end |
 | `d2_helpers.py` | data loading, figures and scores pasted into the Demo 2 notebook |
-| `d2_widgets.py` | the Demo 2 parts: OpenEarthMap scores, place menu (every step follows a change), viewers, score button, result card, all-places views; the tolerance and metric switches are shared (changing one copy changes all and redraws every score) |
-| `build_demo2.py` | → `notebooks/demo2_use_cases.ipynb`, in the same look / under the hood / your turn format as Demo 1; `DATA_URL` is where the data package is hosted |
+| `d2_widgets.py` | the Demo 2 parts: OpenEarthMap examples and scores, place menu (every step follows a change), viewers, score button, result card, all-places views; the tolerance and metric switches are shared (changing one copy changes all and redraws every score) |
+| `build_demo2.py` | → `notebooks/demo2_use_cases.ipynb`, in the same look / under the hood / your turn format as Demo 1, pictures before numbers, the longer findings in collapsed "What we found" cells; `DATA_URL` is where the data package is hosted |
 | `build_demo2_package.py` | makes the Demo 2 data package (needs the service, torch and the land-cover model) |
 | `old_d2_helpers.py` | the model, reference-map and scoring code of the first Demo 2 notebook; used by the package builder |
 | `prestage.py` | sends every job the demos use, so the service has them cached |

@@ -111,23 +111,49 @@ def _task_buttons(value="buildings"):
                            style={"button_width": "110px", "description_width": "150px"})
 
 
-# ---- step 1: the model at home --------------------------------------------------------------
+# ---- part 1: the model at home: pictures first, then numbers ----------------------------------
 
-def model_at_home(url):
-    """The land-cover model on hand-labelled OpenEarthMap tiles: scores and three examples."""
-    try:
-        S["oem"] = oem = get_oem(url)
-    except Exception as exc:  # no network, wrong address: say so, do not crash
-        display(W.HTML(_note(f"Could not load the data: {_html.escape(str(exc))}", "#b00020")))
+def _oem(url):
+    """The OpenEarthMap results, loaded once; None (with a message) if they cannot be loaded."""
+    if "oem" not in S:
+        try:
+            S["oem"] = get_oem(url)
+        except Exception as exc:  # no network, wrong address: say so, do not crash
+            display(W.HTML(_note(f"Could not load the data: {_html.escape(str(exc))}",
+                                 "#b00020")))
+            return None
+    return S["oem"]
+
+
+def home_examples(url):
+    """Three hand-labelled OpenEarthMap tiles: the four images and the model's map of each."""
+    oem = _oem(url)
+    if oem is None:
         return
-    chart = W.Image(format="png", layout=W.Layout(width="720px"))
-    table = W.HTML()
     tile = W.ToggleButtons(options=[(f"example {i + 1}: " +
                                      str(n).rsplit("_", 1)[0].replace("_", " ").title(), i)
                                     for i, n in enumerate(oem["ex"]["names"])],
                            value=0, description="Look at", style={"button_width": "190px",
                                                                   "description_width": "150px"})
     example = W.Image(format="png")
+
+    def draw_example(_=None):
+        example.value = _png(fig_oem_example(oem, tile.value))
+    tile.observe(draw_example, names="value")
+    draw_example()
+    ui = W.VBox([tile, example])
+    ui.tile = tile
+    UI["examples"] = ui
+    display(ui)
+
+
+def home_scores(url):
+    """The scores over all OpenEarthMap tiles, and which classes the model confuses."""
+    oem = _oem(url)
+    if oem is None:
+        return
+    chart = W.Image(format="png", layout=W.Layout(width="720px"))
+    table = W.HTML()
     which = W.ToggleButtons(options=OEM_INPUTS, value="Stage 2", description="Map from",
                             style={"button_width": "100px", "description_width": "150px"})
     matrix = W.Image(format="png", layout=W.Layout(width="560px"))
@@ -142,18 +168,13 @@ def model_at_home(url):
         tab = oem_table(oem, m).copy()
         tab.index = [f"{t}, {i}" for t, i in tab.index]
         table.value = tab.to_html(float_format="%.2f")
-
-    def draw_example(_=None):
-        example.value = _png(fig_oem_example(oem, tile.value))
-    tile.observe(draw_example, names="value")
     SCORE_REFRESH.append(draw_scores)
     draw_scores()
-    draw_example()
     draw_matrix()
-    ui = W.VBox([_switches(), chart, table, W.HTML("<br>"), tile, example,
+    ui = W.VBox([_switches(), chart, table,
                  W.HTML("<br><b>Which classes does the model confuse?</b> (pixel-exact)"),
                  which, matrix])
-    ui.tile, ui.which, ui.matrix = tile, which, matrix
+    ui.which, ui.matrix = which, matrix
     UI["home"] = ui
     display(ui)
 

@@ -22,17 +22,15 @@ PLACES = {
         lat=15.5784, lon=120.9726, date="2026-03-15", confirmed=True,
         note="rice fields, villages and farm-to-market roads"),
     # one place for each other country in the room. Bangkok is also a ready-made area of the
-    # hackathon (tools/hackathon/areas.py); the hackathon's Phnom Penh and Dhaka areas are at
-    # the city edge (mostly wetland), so the demos use the centres instead.
+    # hackathon (tools/hackathon/areas.py); the hackathon's Phnom Penh area is at the city edge
+    # (mostly wetland), so the demos use the centre instead. Dhaka (centre, 23.7600, 90.3850,
+    # 2025-11-15) was tried and left out: the building map only reaches the "everywhere" line.
     "Bangkok, Thailand": dict(
         lat=13.7500, lon=100.4915, date="2026-01-15", confirmed=True, iso="THA",
         note="old city on the Chao Phraya: Grand Palace, Sanam Luang, dense housing, river"),
     "Phnom Penh, Cambodia": dict(
         lat=11.5650, lon=104.9250, date="2026-02-01", confirmed=True, iso="KHM",
         note="city centre: Central Market, Royal Palace, riverfront, dense blocks"),
-    "Dhaka, Bangladesh": dict(
-        lat=23.7600, lon=90.3850, date="2025-11-15", confirmed=True, iso="BGD",   # Jan-Mar: haze
-        note="city centre: National Parliament, Farmgate, old airport, dense housing"),
 }
 OWN_PLACE = "My own place"
 AREA_KM = 2

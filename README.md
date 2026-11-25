@@ -27,7 +27,7 @@ A [Colab notebook](notebooks/workshop.ipynb) walks through the whole thing. Two 
 go with the SSTA workshop sessions ([all notebooks, with links to open them in Colab](notebooks/README.md)):
 
 - [`demo1_super_resolution.ipynb`](notebooks/demo1_super_resolution.ipynb): one notebook for
-  presenter and participants, no coding needed. Pick one of eight places (five in the Philippines, Bangkok, Phnom Penh, Dhaka), then go part by part:
+  presenter and participants, no coding needed. Pick one of seven places (five in the Philippines, Bangkok, Phnom Penh), then go part by part:
   the 8 inputs, stage 1, stage 2, one dial experiment, each with a question. Every part has a
   one-line cell that shows the images and controls, and a collapsed "Under the hood" cell with
   the plain client code behind it (search, manifest, tiles, quality flags, files). "Going

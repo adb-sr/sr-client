@@ -96,8 +96,8 @@ md(rf"""
 
 **▶ Look.** Run the cell, choose the place you know best, and press **Send to the service**.
 The service first makes a free **estimate** (which Sentinel-2 images exist around the date,
-and what the job would cost) and then starts the job. All five places were run before the
-workshop, so they come back quickly and cost nothing.
+and what the job would cost) and then starts the job. All listed places were run before
+the workshop, so they come back quickly and cost nothing.
 
 | Place | What is there |
 |---|---|

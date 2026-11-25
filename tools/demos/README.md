@@ -3,7 +3,7 @@
 | File | What it is |
 |---|---|
 | `../connect.py` | the setup of every notebook that uses the service: `connect()` asks for an email address, gets the workshop key from the service's sign-up and returns the client; `SERVICE_URL` is the service address built into the notebooks |
-| `places.py` | the five places, Demo 1's dial experiments, the jobs of its "Going deeper" part: the single source |
+| `places.py` | the eight places, Demo 1's dial experiments, the jobs of its "Going deeper" part: the single source |
 | `d1_helpers.py` | helper code pasted into the Demo 1 notebook (hidden cell) |
 | `widgets_common.py` | controls shared by the notebooks: answers that save themselves, figures shown as images (ipywidgets); `explain()` and the one-line `NotYet` message for the "Under the hood" cells |
 | `d1_widgets.py` | the Demo 1 parts: place menu and send button, viewers with sliders, experiment button, result card; `picked()` and the notes for the "Under the hood" cells |

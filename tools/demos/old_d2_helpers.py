@@ -111,10 +111,10 @@ def rasterize_like(gdf, like, buffer_m=None):
                      transform=like.rio.transform()).astype(bool)
 
 
-def reference_maps(like):
+def reference_maps(like, iso="PHL"):
     """Open Buildings and OpenStreetMap roads for the area of an image, on its grid."""
     bbox = transform_bounds(like.rio.crs, "EPSG:4326", *like.rio.bounds())
-    buildings = open_buildings(bbox)
+    buildings = open_buildings(bbox, iso)
     roads = osm_roads(bbox)
     roads = roads[roads["class"].isin(ROAD_WIDTH_M)].copy()
     roads["width"] = roads["class"].map(ROAD_WIDTH_M)

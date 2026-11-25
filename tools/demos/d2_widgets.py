@@ -182,7 +182,7 @@ def home_scores(url):
 # ---- step 2: pick your place ----------------------------------------------------------------
 
 def pick_place(url):
-    """A menu of the five places: choosing one loads it, and every part below follows."""
+    """A menu of the places: choosing one loads it, and every part below follows."""
     menu = W.Dropdown(options=list(PLACES), value=PLACE_DEFAULT, description="Place",
                       layout=_WIDE, style=_LABEL)
     status = W.HTML()
@@ -337,7 +337,7 @@ def result_card():
 # ---- for the discussion: all places, and a model trained on each input ----------------------
 
 def all_places_view(url, own_model=False):
-    """Bars and a table for all five places; the switches change how they are counted."""
+    """Bars and a table for all places; the switches change how they are counted."""
     summary = get_summary(url)
     chart = W.Image(format="png")
     table = W.HTML()
@@ -392,7 +392,7 @@ NOTES = {
   It counts pixel-exact: a pixel has to land in one box, so the tolerance does not apply.
 """,
     "package": """
-**What was done before the workshop**, for each of the five places:
+**What was done before the workshop**, for each place:
 
 1. **The images** come from the super-resolution service: the same job as this morning
    (`sr.submit(area, date)`). Stage 1 and Stage 2 are its two results. "Sentinel-2" is its

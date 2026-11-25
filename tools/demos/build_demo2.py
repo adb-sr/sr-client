@@ -66,11 +66,12 @@ OEM_TEXT = r"""
   does not (the exact shape of each building, narrow paths).
 
 So the model works on super-resolved images, but not as well as on a real aerial image. Keep
-that in mind as you leave home: do not expect it to do better in the Philippines than here.
+that in mind as you leave home: do not expect it to do better at your place than here.
 """
 
 RESULTS_TEXT = r"""
-**What we found** (our run before the workshop; scores within 2.5 m unless said otherwise):
+**What we found in the five Philippine places** (our run before the workshop; scores within
+2.5 m unless said otherwise):
 
 * **Buildings**: the score rises with every step, in every place: F1 0.21 to 0.32 on
   Sentinel-2, 0.48 to 0.56 on Stage 1, 0.65 to 0.75 on Stage 2 (pixel-exact 0.53 to 0.60;
@@ -97,6 +98,15 @@ RESULTS_TEXT = r"""
   new country and the imperfect public maps, but the two are not strictly comparable (other
   labels, other places). And the dashed line is far higher in the dense cities here (0.54 to
   0.72 for buildings) than at home (0.40), so the same F1 is worth less here.
+
+**Bangkok, Phnom Penh and Dhaka** (Sentinel-2 / Stage 1 / Stage 2, within 2.5 m) show the same
+order:
+
+* **Buildings**: Bangkok 0.32 / 0.62 / 0.77, Phnom Penh 0.46 / 0.82 / 0.87, Dhaka 0.03 / 0.07 /
+  0.55. In Dhaka the map from Stage 2 stays below the "building everywhere" line (0.60): the
+  blocks are very dense, and the model finds only 41 % of the buildings.
+* **Roads**: Bangkok 0.08 / 0.44 / 0.53, Phnom Penh 0.04 / 0.46 / 0.59, Dhaka 0.02 / 0.13 /
+  0.43, all above the "roads everywhere" line (0.30 to 0.35) with Stage 2.
 
 This is the pattern of Session 3: a model trained on real high-resolution images cannot read
 a 10 m image, and super-resolution lets it work on free Sentinel-2. In a dense city, check
@@ -160,7 +170,7 @@ Session 3's rule: **test super-resolution on a small labelled sample before you 
 Here you run that test for the place you worked on this morning.
 
 One **land-cover model** draws all the maps. It was trained on real high-resolution images
-only: it has never seen Sentinel-2, a super-resolved image, or the Philippines.
+only: it has never seen Sentinel-2 or a super-resolved image.
 
 Same three beats as this morning, and no code to write:
 
@@ -229,7 +239,8 @@ found("What we found at home (open after your turn)", "found_home")
 md(r"""
 ## 2. Your place *(5 minutes)*
 
-**▶ Look.** Now the model leaves home. Choose the place you used this morning. You get three
+**▶ Look.** Now the model leaves home. Choose the place you used this morning, or the one
+you know best. You get three
 images of the same 2 km square: **Sentinel-2** (enlarged), **Stage 1** and **Stage 2**.
 """)
 code("pick_place(DATA_URL)")
@@ -256,7 +267,7 @@ everything below follows.
 
 ## 3. Guess first *(2 minutes)*
 
-**✎ Your turn.** The model has never seen the Philippines. Which image will give the best
+**✎ Your turn.** Your place is far from the model's home. Which image will give the best
 map of **buildings**, and of **roads**? Click your guess before you go on.
 """)
 code("guess()")
@@ -340,12 +351,12 @@ code("result_card()")
 
 md(r"""
 ---
-## For the discussion: all five places
+## For the discussion: all places
 
 Where does super-resolution help most? Where does it make no difference?
 """)
 code("all_places_view(DATA_URL)")
-found("What we found in the five places", "found_places")
+found("What we found in the places", "found_places")
 
 md(r"""
 ## 7. Going further: fine-tune the model

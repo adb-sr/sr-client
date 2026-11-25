@@ -51,11 +51,49 @@ def pick_place(sr):
                        description="Place", layout=_WIDE, style=_LABEL)
     lat = W.FloatText(value=14.6760, description="Latitude", style=_LABEL)
     lon = W.FloatText(value=121.0437, description="Longitude", style=_LABEL)
-    day = W.Text(value="2026-04-15", description="Date (YYYY-MM-DD)", style=_LABEL)
     own = W.VBox([W.HTML(_note("A point (in Google Maps: right-click, then click the "
-                               "coordinates to copy them) and a date in the dry season.")),
-                  lat, lon, day])
+                               "coordinates to copy them). Set a date in the dry season "
+                               "under Options.")),
+                  lat, lon])
     own.layout.display = "none"
+    # the options of the request: the service's defaults until someone changes them
+    wide = {"description_width": "330px"}
+    slider = W.Layout(width="640px")
+    day = W.Text(value=PLACES["Cebu City and Mandaue"]["date"], style=wide,
+                 description="Target date (YYYY-MM-DD)", layout=W.Layout(width="480px"))
+    max_cloud = W.IntSlider(value=40, min=5, max=100, step=5, style=wide, layout=slider,
+                            description="Skip images with more cloud than (%, whole image)")
+    window = W.IntSlider(value=45, min=10, max=180, step=5, style=wide, layout=slider,
+                         description="Search this many days before and after")
+    min_clear = W.IntSlider(value=70, min=0, max=100, step=5, style=wide, layout=slider,
+                            description="Per 320 m tile: use an image if this % is clear")
+    reset = W.Button(description="Back to the defaults", icon="undo",
+                     layout=W.Layout(width="220px"))
+    options = W.Accordion(children=[W.VBox([
+        day, max_cloud, window, min_clear, reset,
+        W.HTML(_note("<i>Whole image</i>: the cloud share of the full Sentinel-2 image, 110 km "
+                     "across, from the catalogue. It says little about your 2 km. <i>Per "
+                     "tile</i>: the share of each 320 m tile that ESA's classification calls "
+                     "clear in that image.", "#555"))])])
+    options.set_title(0, "Options: date, clouds, search window")
+    options.selected_index = None        # closed until someone opens it
+
+    def on_reset(_):
+        max_cloud.value, window.value, min_clear.value = 40, 45, 70
+        if place.value != OWN_PLACE:
+            day.value = PLACES[place.value]["date"]
+    reset.on_click(on_reset)
+
+    def chosen():
+        """Only what differs from the service's defaults, as options of sr.submit."""
+        opts = {}
+        if max_cloud.value != 40:
+            opts["max_cloud"] = max_cloud.value
+        if window.value != 45:
+            opts["time_window"] = {"days_before": window.value, "days_after": window.value}
+        if min_clear.value != 70:
+            opts["min_clear"] = min_clear.value / 100
+        return opts
     about = W.HTML()
     send = W.Button(description="Send to the service", button_style="primary", icon="rocket",
                     layout=W.Layout(width="220px"))
@@ -67,6 +105,8 @@ def pick_place(sr):
         own.layout.display = "" if place.value == OWN_PLACE else "none"
         about.value = _note("" if place.value == OWN_PLACE else PLACES[place.value]["note"],
                             "#555")
+        if place.value != OWN_PLACE:
+            day.value = PLACES[place.value]["date"]     # the date we tried for this place
     place.observe(describe, names="value")
     describe()
 
@@ -74,15 +114,19 @@ def pick_place(sr):
         send.disabled = True
         try:
             if place.value == OWN_PLACE:
-                la, lo, d = float(lat.value), float(lon.value), day.value.strip()
-                date.fromisoformat(d)
+                la, lo = float(lat.value), float(lon.value)
             else:
-                p = PLACES[place.value]
-                la, lo, d = p["lat"], p["lon"], p["date"]
+                la, lo = PLACES[place.value]["lat"], PLACES[place.value]["lon"]
+            d, opts = day.value.strip(), chosen()
+            date.fromisoformat(d)
             status.value = _note("Asking the service which Sentinel-2 images exist ...")
             area = area_around(la, lo, km=2)
-            est = sr.estimate(area, d)
-            lines = [f"{place.value}, {d}",
+            est = sr.estimate(area, d, **opts)
+            changed = ", ".join(
+                ([f"images up to {max_cloud.value} % cloud"] if "max_cloud" in opts else []) +
+                ([f"{window.value} days before and after"] if "time_window" in opts else []) +
+                ([f"tiles at least {min_clear.value} % clear"] if "min_clear" in opts else []))
+            lines = [f"{place.value}, {d}" + (f"   (options: {changed})" if changed else ""),
                      f"{len(est['scenes'])} Sentinel-2 images found between "
                      f"{est['search_window'][0]} and {est['search_window'][1]}",
                      f"{est['tiles']} tiles of 320 m; cost if nothing was computed before: "
@@ -91,12 +135,13 @@ def pick_place(sr):
             if est["problems"]:
                 lines += [f"cannot send this job: {p}" for p in est["problems"]]
                 status.value = _pre("\n".join(lines)) + _note(
-                    "Choose another place or date and press the button again.", "#b00020")
+                    "Change the place, the date or the options and press the button again.",
+                    "#b00020")
                 return
-            job = sr.submit(area, d)
+            job = sr.submit(area, d, **opts)
             S.clear()
             S.update(sr=sr, place=place.value, lat=la, lon=lo, date=d, area=area, est=est,
-                     job=job)
+                     job=job, options=opts)
             ANSWERS["PLACE"] = f"{place.value} ({d})"
             sent = _pre("\n".join(lines)) + _note(
                 f"<b>Job sent</b> ({job.id[:8]}).", "#1a7f37")
@@ -128,8 +173,10 @@ def pick_place(sr):
             send.disabled = False
     send.on_click(on_send)
 
-    ui = W.VBox([place, about, own, send, status, waiting, picture])
+    ui = W.VBox([place, about, own, options, send, status, waiting, picture])
     ui.place, ui.send, ui.status, ui.own_fields = place, send, status, (lat, lon, day)
+    ui.options = dict(day=day, max_cloud=max_cloud, window=window, min_clear=min_clear,
+                      reset=reset)
     ui.picture = picture
     UI["place"] = ui
     display(ui)
@@ -261,7 +308,8 @@ def step5_experiment():
         try:
             name = choice.value
             status.value = _note("Sending the job ...")
-            trial = S["sr"].submit(S["area"], S["date"], **EXPERIMENTS[name])
+            trial = S["sr"].submit(S["area"], S["date"], **S.get("options", {}),
+                                   **EXPERIMENTS[name])
             _wait(trial, status)
             if trial.status not in ("done", "partial"):
                 status.value = _note(f"The job {trial.status}: {trial.info.get('error')}",
@@ -356,6 +404,11 @@ def picked():
     return S["lat"], S["lon"], S["date"], S["area"], S["job"]
 
 
+def my_options():
+    """What was changed under "Options" in part 1, as options of sr.submit ({} = defaults)."""
+    return dict(S.get("options", {}))
+
+
 def my_experiment():
     """The experiment run in part 5: (its name, its job)."""
     if "trial" not in S:
@@ -375,7 +428,8 @@ Both stages run by default; Stage 1 is published first.
 |---|---|---|
 | `stages` | `["1", "2"]` | `["1"]` is fast and cheap; add Stage 2 later with `job.upgrade()` |
 | `time_window` | 45 days before and after | how far from the date the search may go |
-| `max_cloud` | 40 | skip images with more cloud than this (%, whole Sentinel-2 tile) |
+| `max_cloud` | 40 | skip images with more cloud than this (%, whole Sentinel-2 image of 110 km) |
+| `min_clear` | 0.7 | per 320 m tile: use an image only if at least this share of the tile is clear |
 | `tau` | 250 | Dial 1: how much noise Stage 2 adds (10 to 999) |
 | `nfe` | same as `tau` | Dial 2: in how many steps the noise is removed |
 | `seed` | 0 | the random noise; same inputs and same seed give the same image |

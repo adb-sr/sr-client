@@ -2,41 +2,39 @@
 
 *SSTA workshop, 27 November 2026, 11:00–15:00. In the room and online.*
 
-**Your team writes the brief.** Pick a decision that someone in your agencies really makes and
-that an image could inform, such as "which 20 blocks do our field teams visit this quarter?".
-Then walk through what it takes to judge whether super-resolved (SR) Sentinel-2 fits. By 14:15
-you answer on one slide: **pilot it**, **test it first** or **not a fit**, with your test plan.
+**Your team chooses the decision.** Pick one that an office in your agency makes regularly and
+that a satellite image could support, such as "which 20 blocks do our field teams visit this
+quarter?". Then check, step by step, whether super-resolved (SR) Sentinel-2 images fit it. By
+14:15 you answer on one slide: **pilot it**, **test it first** or **not a fit**, and how you
+would test it.
 
-There is no leaderboard and no coding. "Super-resolution is not a fit here" is a good answer.
+There is no ranking and no coding. "Not a fit" is a good answer.
 
 ## Start here
 
-| Notebook | What it is |
-|---|---|
-| **[Your scenario](scenario/README.md)** | The hackathon. [Open in Colab](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/hackathon/scenario/hackathon_scenario.ipynb) |
+**[Your scenario](scenario/README.md)**: [open the notebook in Colab](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/hackathon/scenario/hackathon_scenario.ipynb)
 
 ## How it works
 
-1. **Open the notebook** and choose **Runtime → Run all**. You need a Google account. Nothing
-   to install.
+1. **Start the notebook**: choose **Runtime → Run all**. You need a Google account. Nothing to
+   install.
 2. **Write your scenario** (before lunch): who decides what, and how often; what the image must
-   show and how big it is; the number you would report, and the **minimum** you need.
-3. **Choose your area and dates** (before lunch): a ready-made area whose pictures come with
-   the notebook, or a place of your own (up to 2 km × 2 km; the SR service makes it while you
-   are at lunch). See which Sentinel-2 images exist.
-4. **Check the money**: what the images cost for your whole area, and what real
-   high-resolution images would have to save to be worth their price.
-5. **Look**: free Sentinel-2, SR stage 1 and three strengths of SR stage 2, side by side.
-   Commit to the image you would use.
-6. **Cheat sheet and next steps**: what we measured for tasks like yours, whether it agrees
-   with you, and how you would test it at home.
-7. **Your slide**: the notebook fills a card for it.
+   show and how big it is; the number that shows success, and the **minimum** you need.
+3. **Choose your area** (before lunch): a ready-made area, or your own (up to 2 km × 2 km; the
+   SR service makes the images while you are at lunch).
+4. **Check the cost**: what the images cost for your whole area, and what real high-resolution
+   images must save to be worth their price.
+5. **Compare five images**: free Sentinel-2, SR stage 1, and SR stage 2 at three strengths.
+   Choose the one you would use.
+6. **Cheat sheet and test plan**: what we measured for tasks like yours, whether it agrees with
+   your choice, and how you would test this at home.
+7. **Your slide**: the notebook collects your answers on a card.
 
-## Measured cases
+## Measured tasks
 
-Three tasks for which experts labelled the ground, so results were measured. The cheat sheet
-draws on them. If one fits your scenario, part 5 of the scenario notebook sends you there to
-try your own budget and your own rule for a hit.
+For three tasks, experts mapped the ground, so we could measure results. The cheat sheet uses
+them. If one fits your scenario, part 5 of the notebook links to it, and you can try your own
+numbers there.
 
 | Task | Decisions you can test | Notebook |
 |---|---|---|
@@ -52,19 +50,19 @@ One person shares their screen and operates the notebook. Everyone else has a ro
 |---|---|
 | Decision-maker | speaks for the office that decides |
 | Field lead | keeps the numbers realistic: places, visits, money |
-| Sceptic | asks "what if the picture is wrong?" |
+| Sceptic | asks "what if the image is wrong?" |
 | Rapporteur | fills the slide and presents |
 
-If Colab does not open on your office network, join a teammate's screen: you can do the whole
-exercise without touching the notebook.
+If Colab does not open on your office network, follow on a teammate's screen. You can take
+part without touching the notebook.
 
 ## Your slide
 
 One slide per team, in the shared team-slide file: the scenario, what you found, your
-recommendation and your test plan. Three minutes per team from 14:30, then one question from
-the "decision-maker".
+recommendation and your test plan. From 14:30, each team has three minutes, then one question
+from the "decision-maker".
 
 ---
-The starting scenarios in the notebooks are invented for this workshop. The data packages are
+The example scenarios in the notebooks are invented for this workshop. The data packages are
 workshop material: they contain modified Copernicus Sentinel data and third-party labels and
 imagery under their own licences (see each task README). Please do not redistribute them.

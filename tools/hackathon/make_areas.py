@@ -1,4 +1,4 @@
-"""Run the ready-made areas of the scenario notebook on the SR service and pack their pictures.
+"""Run the ready-made areas of the scenario notebook on the SR service and pack their images.
 
     export SR_API_KEY=srk_... SR_API_URL=https://...
     python tools/hackathon/make_areas.py                      # estimates only (free)
@@ -7,7 +7,7 @@
 
 Every area in areas.py is run at the three stage-2 levels (tau 100, 250, 500; stage 1 and the
 Sentinel-2 input come with each). The result is OUT_DIR/scenario_areas.zip: for each area the
-five pictures (one contrast stretch for all, so the levels compare fairly) and meta.json with
+five images (one contrast stretch for all, so they compare fairly) and meta.json with
 the scenes found, the tile count, the cost and the warnings. Upload the zip next to the other
 data packages; the notebook then shows these areas at once and without a key.
 OUT_DIR/contact_sheet.png shows every area: check that each one is the place its name says.

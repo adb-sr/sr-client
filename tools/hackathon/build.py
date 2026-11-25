@@ -531,42 +531,41 @@ READY_MADE = {
 def scenario():
     name = "hackathon_scenario"
     cells = [md(f"""
-# Mini-hackathon: is super-resolution a fit for *your* decision?
+# Mini-hackathon: is super-resolution a fit for your decision?
 
 *SSTA workshop, 27 November 2026.*
 
 {badge(name)}
 
-**Your team writes the brief.** Pick a decision that someone in your agencies really makes and
-that an image could inform. Then walk through what it takes to judge whether super-resolved
-(SR) Sentinel-2 fits: the area, the images that exist, the money, what the pictures show, what
-we measured for similar tasks, and how you would test it at home.
+**Your team chooses the decision.** Pick one that an office in your agency makes regularly and
+that a satellite image could support. Then check, step by step, whether super-resolved (SR)
+Sentinel-2 images fit it.
 
-By 14:15, answer on one slide: **pilot it**, **test it first** or **not a fit**, with your test
-plan. There is no leaderboard. "Super-resolution is not a fit here" is a good answer.
+By 14:15 you answer on one slide: **pilot it**, **test it first** or **not a fit**, and how you
+would test it. There is no ranking. "Not a fit" is a good answer.
 
 | Part | What you do | When |
 |---|---|---|
-| 0 | Start the notebook with one click | 11:15 |
+| 0 | Start the notebook | 11:15 |
 | 1 | Write your scenario | 11:15–11:50 |
-| 2 | Choose your area and dates. An area of your own: send it **before lunch** | 11:50–12:00 |
+| 2 | Choose your area. Your own area: send it **before lunch** | 11:50–12:00 |
 | 3 | What would the images cost? | 13:00 |
-| 4 | Look: which image would you use? | 13:25 |
-| 5 | Cheat sheet and next steps: how would you test it? | 13:55 |
+| 4 | Compare the images and choose one | 13:25 |
+| 5 | Cheat sheet and test plan | 13:55 |
 | 6 | Your slide | 14:15 |
 
 **No coding needed.** You type, click and discuss.
 """),
              md("""
-## 0. Start with one click
+## 0. Start the notebook
 
 1. In the top menu, choose **Runtime → Run all**.
 2. Colab warns that Google did not write this notebook. Choose **Run anyway**.
 3. Wait about a minute, then scroll down.
 
-After that, use only the **controls**: text fields, menus, sliders and buttons. They act at
-once and save your answers. If a control does nothing, click the ▶ to the left of its cell.
-Keep this browser tab open over lunch.
+After that, use only the **controls**: text fields, menus, sliders and buttons. Changes apply
+at once and your answers are saved. If a control does nothing, click the ▶ to the left of its
+cell. Keep this browser tab open over lunch.
 
 **Working online?** One person shares their screen and operates the controls. Give out four
 roles:
@@ -575,7 +574,7 @@ roles:
 |---|---|
 | Decision-maker | speaks for the office that decides |
 | Field lead | keeps the numbers realistic: places, visits, money |
-| Sceptic | asks "what if the picture is wrong?" |
+| Sceptic | asks "what if the image is wrong?" |
 | Rapporteur | fills the slide and presents |
 """),
              code("# @title Helper functions (run this cell; you do not need to read it) { display-mode: \"form\" }\n"
@@ -590,105 +589,101 @@ get_areas(DATA_URL)
              md("""
 ## 1. Your scenario
 
-Agree on **one decision** that a real office makes again and again, and that an image could
-inform. Good scenarios are narrow: "which 20 blocks do we visit this quarter" beats "monitor
-urban growth".
+Agree on **one decision** that an office makes regularly and that an image could support. Keep
+it narrow: "which 20 blocks do we visit this quarter" works; "monitor urban growth" does not.
 
-* **Who decides, what, and how often?** And how do they decide today?
+* **Who decides what, and how often?** How do they decide today?
 * **What must the image show?** Name the thing and its size. A house is about 8 m, a farm road
-  4 m, a car 2 m. Sentinel-2 has 10 m pixels; super-resolution delivers 2.5 m.
+  4 m, a car 2 m. Sentinel-2 pixels are 10 m; super-resolved pixels are 2.5 m.
 * **Success.** Which number would you report to your director? What is the **minimum** you
-  need, and why that value? What happens below it: more wasted visits, people left out, a
-  wrong notice? Would it then be cheaper to buy real images?
+  need, and why? What happens below it: wasted visits, people left out, a wrong notice? Would
+  real images then be worth their price?
 
-Write your answers before you look at any picture. If your team has no idea after ten minutes,
-open "Stuck?" at the bottom, or ask a facilitator for a scenario card.
+Write your answers before you look at any image. No idea after ten minutes? Open "Stuck?"
+below the fields, or ask a facilitator.
 """),
              code("canvas()"),
              md("""
 ## 2. Your area and dates
 
-Choose a place where your decision would be made.
+Choose an area where your decision applies.
 
-* **Ready-made areas.** We ran these before the workshop; their pictures came with the
-  notebook. Take the one most like your scenario. You need no key.
-* **A place of your own.** Possible, up to 2 km × 2 km, with the API key on your team card.
-  The service needs 5 to 10 minutes for the three levels, so **send it before lunch**.
+* **Ready-made areas.** We prepared these before the workshop. Take the one most like your
+  scenario. No key needed.
+* **Your own area.** Up to 2 km × 2 km. You need the API key on your team card. The SR service
+  takes 5 to 10 minutes, so **send it before lunch**.
 
-For any area you see **which Sentinel-2 images exist** around your date. Super-resolution
-blends several clear images of the same place. In a cloudy season there may be too few.
+For each area you see **how many Sentinel-2 images exist** around your date. Super-resolution
+needs several. In a cloudy season there may be too few.
 
-**Three levels.** Stage 1 is always made. Stage 2 can redraw a little or a lot:
+**Five images.** You will compare them in part 4:
 
 | Image | What it is |
 |---|---|
-| **Sentinel-2** | The free 10 m image, simply enlarged. The "do nothing" option. |
-| **SR stage 1** | Careful: blends the Sentinel-2 images into one sharper image. Invents nothing. |
-| **SR stage 2, light** | AI adds a little texture. |
-| **SR stage 2, standard** | The setting of the service. |
-| **SR stage 2, strong** | AI redraws a lot. Sharpest, and the most invented detail. |
+| **Sentinel-2** | The free 10 m image, enlarged. The "do nothing" option. |
+| **SR stage 1** | Blends several Sentinel-2 images into one sharper image. Invents nothing. |
+| **SR stage 2, light** | AI adds a little detail. |
+| **SR stage 2, standard** | AI adds more detail. The service's default. |
+| **SR stage 2, strong** | AI adds the most detail. Sharpest, and the most invented. |
 """),
              code("area_panel()"),
              md("""
 ## 3. What would the images cost?
 
-Your area and how often you need a fresh map come from part 1. Real images and super-resolution
-differ in price by a factor of about a thousand, so the question is not "which is cheaper" but
-**what must real images save to be worth their price?**
+The area and how often you need a new map come from part 1. Real high-resolution images cost
+about a thousand times more than super-resolution. So ask: **what must real images save to be
+worth their price?**
 
-* Set what **one wasted action** costs you: a field visit to the wrong place, a wrong notice.
-* Read how many wasted actions a year real images would have to avoid.
-* Try the **mixed strategy**: SR everywhere to choose where to look, real images for a small
-  share of the area.
-* Go back to your **minimum value** in part 1. If SR stays below it, is the extra money for
-  real images justified?
+* Enter what **one wasted visit** costs you.
+* Read how many wasted visits a year real images must prevent.
+* Try the **mix**: SR for the whole area to decide where to look, real images for a small part.
+* Look at your **minimum** in part 1. If SR stays below it, are real images worth the extra
+  money?
 """),
              code("money_panel()"),
              md("""
-## 4. Look: which image would you use?
+## 4. Compare the images and choose one
 
-Press **Load the pictures**. Zoom to 250 m, move around, and compare the levels on the thing
-your decision needs.
+Press **Load the images**. Zoom to 250 m, move around, and look for the thing your decision
+depends on.
 
-* Can you see it on plain Sentinel-2 already?
-* What does stage 1 add? What does stage 2 add at each level?
-* Find a place you know. Does stage 2 show something that is **not there**? Compare with
-  stage 1, which invents nothing: detail that appears only in stage 2 is a guess.
+* Can you already see it on Sentinel-2?
+* What does stage 1 add? What does each strength of stage 2 add?
+* Find a place you know. Does stage 2 show something that is **not there**? Stage 1 invents
+  nothing, so detail that only stage 2 shows is a guess.
 * "Two, large" puts two images side by side.
 
-Then **commit**: which image would you use, and why? Decide before you open part 5.
+Then **choose**: which image would you use, and why? Part 5 opens after you choose.
 """),
              code("look_panel()"),
              md("""
-## 5. Cheat sheet and next steps
+## 5. Cheat sheet and test plan
 
-The cheat sheet says what we **measured** for tasks like yours: with experts' labels, in
-other places. Choose the task closest to yours.
+The cheat sheet shows what we **measured** for tasks like yours, in other places, against maps
+drawn by experts. Choose the task closest to yours.
 
-* Does it agree with what you chose in part 4? If your eyes and the measurements disagree,
-  that is the most useful finding of the day.
-* The cheat sheet was measured elsewhere, with other models. **How would you test it at
-  home?** Fill in the test plan: what you would check the map against, what you would compare
-  it with, and the pass mark that follows from your minimum value.
-* If one of our measured tasks fits your scenario, open its notebook and try your budget and
-  your rule there.
+* Does it agree with your choice in part 4? If not, that is your most useful finding today.
+* Our results come from other places and other models. **How would you test this at home?**
+  Fill in the test plan: what you check the map against, what you compare it with, and the
+  pass mark (your minimum).
+* If one of our measured tasks fits your scenario, open its notebook and try your own numbers
+  there.
 """),
              code("cheat_panel()"),
              md("""
 ## 6. Your slide
 
-Choose your recommendation and tick your safeguards. The card collects everything and updates
-by itself.
+Choose your recommendation and tick your safeguards. The card below collects all your answers.
 
-**Your slide** has four parts:
-1. **The scenario**: who decides what, what the image must show, your minimum value.
-2. **What you found**: the area, the cost, the image you would use (add the picture from part 4).
-3. **The cheat sheet**: does it agree with you?
-4. **Recommendation and test plan**: *pilot it*, *test it first* or *not a fit*; how you would
+**Your slide** has three parts:
+1. **The scenario**: who decides what, what the image must show, your minimum.
+2. **What you found**: the area, the cost, the image you would use, and whether the cheat
+   sheet agrees. Add the image you downloaded in part 4.
+3. **Recommendation and test plan**: *pilot it*, *test it first* or *not a fit*; how you would
    test it and what you need.
 """),
              code("scenario_card()"),
-             md(FOOTER.replace("The briefs are invented", "The starting scenarios are invented"))]
+             md(FOOTER.replace("The briefs are invented", "The example scenarios are invented"))]
     return name, cells
 
 

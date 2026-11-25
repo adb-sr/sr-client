@@ -23,16 +23,16 @@ sr2 = job.open("stage2_sr.tif")       # xarray, reflectance (needs [geo])
 job.download("results/")              # every file, under results/<job id>/
 ```
 
-A [Colab notebook](notebooks/workshop.ipynb) walks through the whole thing. Three more notebooks
+A [Colab notebook](notebooks/workshop.ipynb) walks through the whole thing. Two more notebooks
 go with the SSTA workshop sessions:
 
-- [`demo1_super_resolution.ipynb`](notebooks/demo1_super_resolution.ipynb): the presenter's
-  walkthrough. Part A: scene search, sending a job and its options, the 8 inputs, stage 1,
-  stage 2, files and quality flags. Part B: the two dials (`tau`, `nfe`), what the model
-  invents (seeds), NIR/NDVI, a check against real 1 m images.
-- [`demo1_your_turn.ipynb`](notebooks/demo1_your_turn.ipynb): the participants' worksheet.
-  Pick one of five places, look at the inputs and both stages, run one dial experiment, and
-  answer four questions (about 20 minutes, no coding).
+- [`demo1_super_resolution.ipynb`](notebooks/demo1_super_resolution.ipynb): one notebook for
+  presenter and participants, no coding needed. Pick one of five places, then go part by part:
+  the 8 inputs, stage 1, stage 2, one dial experiment, each with a question. Every part has a
+  one-line cell that shows the images and controls, and a collapsed "Under the hood" cell with
+  the plain client code behind it (search, manifest, tiles, quality flags, files). "Going
+  deeper" at the end: all dial settings (`tau`, `nfe`), what the model invents (seeds), a
+  check against real 1 m images.
 - [`demo2_use_cases.ipynb`](notebooks/demo2_use_cases.ipynb): from images to maps, for the
   same five places. A land-cover model trained on real high-resolution images is first scored
   on hand-labelled OpenEarthMap tiles, then on Sentinel-2, stage 1 and stage 2 of each place

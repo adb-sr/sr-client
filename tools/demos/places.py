@@ -25,7 +25,7 @@ PLACES = {
 OWN_PLACE = "My own place"
 AREA_KM = 2
 
-# Demo 1 worksheet, step 5: one change to the Stage 2 dials, on the same area
+# Demo 1, part 5: one change to the Stage 2 dials, on the same area
 EXPERIMENTS = {
     "less noise (tau 100)": dict(tau=100),
     "more noise (tau 500)": dict(tau=500, nfe=250),
@@ -36,7 +36,7 @@ EXPERIMENTS = {
 # The noise experiments keep the default 250 steps: only one dial changes, and the job takes
 # as long as the default (with 999 steps it took 8.6 minutes on dev when not cached).
 
-# Demo 1 walkthrough (presenter), Cebu only
+# Demo 1, "Going deeper" (sections 8 to 10), Cebu only
 PRESENTER_PLACE = "Cebu City and Mandaue"
 PRESENTER_DIALS = {
     "tau 100": dict(tau=100),

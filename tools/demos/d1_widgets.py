@@ -1,4 +1,4 @@
-# ---- the worksheet's controls: dropdowns, buttons and sliders that act at once ---------------
+# ---- the controls of Demo 1: dropdowns, buttons and sliders that act at once ---------------
 S = {}          # this session: the place, the jobs and the images that are already loaded
 OWN_PLACE = "My own place"
 _DONE = ("done", "partial", "failed", "cancelled")
@@ -7,7 +7,7 @@ _DONE = ("done", "partial", "failed", "cancelled")
 def _ready(*keys):
     """True if the earlier steps were done; otherwise says which step is missing."""
     if "job" not in S:
-        display(W.HTML(_note("<b>Pick a place in step 1 first</b>: choose it and press the "
+        display(W.HTML(_note("<b>Pick a place in part 1 first</b>: choose it and press the "
                              "button, then run this cell again.", "#b00020")))
         return False
     return True
@@ -97,7 +97,7 @@ def pick_place(sr):
                      job=job)
             ANSWERS["PLACE"] = f"{place.value} ({d})"
             status.value = _pre("\n".join(lines)) + _note(
-                f"<b>Job sent</b> ({job.id[:8]}, {job.status}). Go on with step 2.", "#1a7f37")
+                f"<b>Job sent</b> ({job.id[:8]}, {job.status}). Go on with part 2.", "#1a7f37")
         except ValueError:
             status.value = _note("The date must look like 2026-04-15.", "#b00020")
         except SRError as exc:
@@ -321,3 +321,103 @@ def result_card():
     ui.card, ui.again = card, again
     UI["card"] = ui
     display(ui)
+
+
+# ---- "under the hood" cells: the plain code behind each step ---------------------------------
+
+class NotYet(Exception):
+    """An earlier step is missing. Shown as one line, without a traceback."""
+
+    def _render_traceback_(self):
+        return [f"\x1b[31m{self}\x1b[0m"]
+
+
+def picked():
+    """The place sent in part 1: (lat, lon, date, area, job)."""
+    if "job" not in S:
+        raise NotYet("Pick a place in part 1 first (choose it and press the button), then run "
+                     "this cell again.")
+    return S["lat"], S["lon"], S["date"], S["area"], S["job"]
+
+
+def my_experiment():
+    """The experiment run in part 5: (its name, its job)."""
+    if "trial" not in S:
+        raise NotYet("Run an experiment in part 5 first (press 'Run my experiment'), then run "
+                     "this cell again.")
+    return S["experiment"], S["trial"]
+
+
+NOTES = {
+    "request": """
+**What happened.** Two calls: `sr.estimate(area, date)` is free and only searches;
+`sr.submit(area, date)` starts the job. The search looks **45 days before and after** the date
+and keeps images with **less than 40 % cloud** over the whole Sentinel-2 tile (110 km across).
+Both stages run by default; Stage 1 is published first.
+
+| Option of `sr.submit` | Default | What it does |
+|---|---|---|
+| `stages` | `["1", "2"]` | `["1"]` is fast and cheap; add Stage 2 later with `job.upgrade()` |
+| `time_window` | 45 days before and after | how far from the date the search may go |
+| `max_cloud` | 40 | skip images with more cloud than this (%, whole Sentinel-2 tile) |
+| `tau` | 250 | Dial 1: how much noise Stage 2 adds (10 to 999) |
+| `nfe` | same as `tau` | Dial 2: in how many steps the noise is removed |
+| `seed` | 0 | the random noise; same inputs and same seed give the same image |
+""",
+    "search": """
+**How to read the chart.** Each dot is one Sentinel-2 image that the search found. Its height
+is how much of *this area* is under cloud or cloud shadow in that image (ESA's scene
+classification). Blue dots were used; the larger the dot, the more of the area it was used
+for. Grey rings were not used.
+
+**Why are some cloudy images used?** The model works on squares of 320 m, and the 8 images are
+chosen **for each square separately**: the clearest, closest in time. An image that is cloudy
+over most of the area can still be clear over a few squares, and is used only there (a small
+dot). The manifest records the choice for every square, so every pixel can be traced back to
+the Sentinel-2 images behind it.
+""",
+    "tiles": """
+**From tiles to one image.** The model always works on squares of **320 m** (32 Sentinel-2
+pixels). A larger area is cut into such tiles; each goes through the model on its own, with
+its own 8 images. The service then stitches the results:
+
+* neighbouring tiles **overlap by 80 m** (yellow and blue on the left); in the overlap one
+  result fades into the other, so there is no hard edge;
+* the **colours of neighbouring tiles are matched**, because two tiles may have used
+  different images;
+* a tile with no clear image at all stays empty (a black square).
+
+On the right: how many different images each tile had. Tiles with fewer different images hold
+less real detail (some images are then used twice).
+""",
+    "result": """
+**What comes with every result.** The images, and the information you need to judge them:
+
+| File | What it holds |
+|---|---|
+| `stage1_sr.tif`, `stage2_sr.tif` | the 2.5 m images: red, green, blue, near-infrared; reflectance × 10,000 |
+| `lr_reference.tif` | the Sentinel-2 input, 10 m (the average of the images the model saw) |
+| `validity.tif` | 0 no data · 1 valid · 2 low diversity (fewer than 4 different clear images) |
+| `manifest.json` | the images used for every tile, the settings, model versions, cost |
+
+**Warnings** never stop a job, but read them: `water` (detail in shallow water and on reefs is
+not reliable), `low_diversity`, `nodata` and `haze`. The files open in QGIS or ArcGIS; in
+Colab they are in the file browser on the left, under `sr_results/`. Links last 7 days.
+""",
+    "dials": """
+**What the experiment changed.** Only the options of `sr.submit`; the area, the date and the
+8 input images are the same, and so is Stage 1.
+
+**The two numbers.** *Agreement with Sentinel-2*: average each 4 × 4 block of the 2.5 m image
+back to one 10 m pixel and correlate it with the Sentinel-2 input (1 = the same pattern of
+light and dark). It cannot see anything smaller than 10 m, so detail the model draws below
+that size is not checked by it. *Fine detail*: the average change in brightness from one pixel
+to the next. The cost of Stage 2 grows with the number of steps (`nfe`).
+""",
+}
+
+
+def explain(key):
+    """The note that goes with an "under the hood" cell."""
+    from IPython.display import Markdown
+    display(Markdown(NOTES[key].strip("\n")))

@@ -410,7 +410,7 @@ class Sweep:
         return self.jobs
 
 
-# ---- the worksheet ("your turn") ---------------------------------------------------------
+# ---- the parts with controls ---------------------------------------------------------------
 
 def view(da, lat, lon, size_m=500, east_m=0, north_m=0):
     """A square of size_m metres; its centre is moved east_m and north_m from (lat, lon)."""
@@ -419,14 +419,20 @@ def view(da, lat, lon, size_m=500, east_m=0, north_m=0):
     return clip(da, lat2, lon2, size_m / 1000)
 
 
+def middle_tile(m):
+    """The tile nearest the middle of the area (row/col: its corner, in 10 m pixels; a tile
+    is 32 pixels wide)."""
+    mid_r, mid_c = m["grid"]["height"] / 2, m["grid"]["width"] / 2
+    return min(m["tiles"],
+               key=lambda t: (t["row"] + 16 - mid_r) ** 2 + (t["col"] + 16 - mid_c) ** 2)
+
+
 def show_inputs(job, lat, lon, target_date, km=0.5):
     """The 8 Sentinel-2 images the model used for the tile in the middle of the area, with
     the masked pixels (cloud, cirrus, shadow, no data) outlined in red."""
     m = manifest(job)
     target = date.fromisoformat(str(target_date))
-    mid_r, mid_c = m["grid"]["height"] / 2, m["grid"]["width"] / 2
-    tile = min(m["tiles"],
-               key=lambda t: (t["row"] + 16 - mid_r) ** 2 + (t["col"] + 16 - mid_c) ** 2)
+    tile = middle_tile(m)
     scenes = scene_images(tile["scene_ids"], lat, lon, km)
     fig, axes = plt.subplots(1, len(scenes), figsize=(2.3 * len(scenes), 2.9), squeeze=False)
     for i, (ax, (sid, img, masked), d) in enumerate(zip(axes[0], scenes, tile["dates"]), 1):
@@ -461,3 +467,44 @@ WARNING_MEANING = {
 def seed_difference(a, b):
     """Mean absolute difference of two images over the natural-colour bands."""
     return np.abs(a.sel(band=[1, 2, 3]) - b.sel(band=[1, 2, 3])).mean("band")
+
+
+# ---- figures for the "under the hood" cells -------------------------------------------------
+
+def plot_search(est, m, cloudy, target_date):
+    """Every Sentinel-2 image the search found, as a dot: days from the target date against
+    the share of the area under cloud or shadow. Blue = used (larger = used for more tiles),
+    grey ring = not used."""
+    target = date.fromisoformat(str(target_date))
+    n_tiles = {s["id"]: sum(s["id"] in t["scene_ids"] for t in m["tiles"])
+               for s in est["scenes"]}
+    fig, ax = plt.subplots(figsize=(10, 3.4))
+    for s in est["scenes"]:
+        d = (date.fromisoformat(s["date"][:10]) - target).days
+        share = n_tiles[s["id"]] / len(m["tiles"])
+        if share:
+            ax.scatter(d, 100 * cloudy[s["id"]], s=20 + 160 * share, color="#007DB7",
+                       alpha=0.85, zorder=3)
+        else:
+            ax.scatter(d, 100 * cloudy[s["id"]], s=60, color="none", edgecolors="grey",
+                       zorder=2)
+    ax.axvline(0, color="k", ls=":")
+    ax.set_ylim(-8, 105)
+    ax.set_xlabel(f"days from {target_date}")
+    ax.set_ylabel("cloud and shadow\nover the area (%)")
+    ax.set_title(f"{len(est['scenes'])} images found, {sum(v > 0 for v in n_tiles.values())} "
+                 f"used (blue; larger = used for more of the {len(m['tiles'])} tiles)")
+    plt.show()
+
+
+def show_validity(validity):
+    """The quality map that comes with every result."""
+    fig, ax = plt.subplots(figsize=(4.6, 4.6))
+    ax.imshow(validity.values[0], cmap=plt.matplotlib.colors.ListedColormap(
+        ["black", "#cfe8f3", "orange"]), vmin=0, vmax=2, interpolation="nearest")
+    ax.set_title("validity: black no data, blue valid,\norange low diversity", fontsize=10)
+    ax.axis("off")
+    plt.show()
+    v = validity.values[0]
+    print(f"valid {np.mean(v == 1):.1%}, low diversity {np.mean(v == 2):.1%}, "
+          f"no data {np.mean(v == 0):.1%}")

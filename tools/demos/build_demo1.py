@@ -1,16 +1,25 @@
-"""Builds notebooks/demo1_super_resolution.ipynb: the presenter's walkthrough for Practical
-demonstration 1 (Part A, about 15 minutes) plus the deeper material (Part B).
+"""Builds notebooks/demo1_super_resolution.ipynb: the one notebook of Practical demonstration 1.
 
     python tools/demos/build_demo1.py
+
+The session zig-zags. Each part has a one-line cell that everyone runs (pictures and controls),
+a collapsed "Under the hood" cell with the plain sr-client code behind it (the presenter opens
+it on the screen; optional for everyone else), and a few minutes in which participants explore
+their own place and answer a question. "Going deeper" at the end is for later.
+
+The helper code (d1_helpers.py), the controls (widgets_common.py, d1_widgets.py) and the list
+of places (places.py) are pasted into a hidden form cell, so the notebook runs on its own in
+Colab.
 """
 from pathlib import Path
 
 import nbformat as nbf
 
-from places import EXPERIMENTS, PLACES, PRESENTER_CHECKS, PRESENTER_DIALS, as_code
+from places import AREA_KM, EXPERIMENTS, PLACES, PRESENTER_CHECKS, PRESENTER_DIALS, as_code
 
 HERE = Path(__file__).parent
 OUT = HERE.parent.parent / "notebooks" / "demo1_super_resolution.ipynb"
+PIP = '%pip install -q "sr-client[geo,viz] @ git+https://github.com/adb-sr/sr-client@v0.1.0"'
 cells = []
 
 
@@ -25,6 +34,14 @@ def code(s, hidden=False):
     cells.append(c)
 
 
+def hood(title, s):
+    """A collapsed cell: Colab shows only its title and the run button until it is opened."""
+    code(f'# @title Under the hood: {title} {{ display-mode: "form" }}\n' + s.strip("\n"),
+         hidden=True)
+
+
+place_rows = "\n".join(f"| **{name}** | {p['note']} |" for name, p in PLACES.items())
+
 md(r"""
 # Practical demonstration 1: the super-resolution service
 
@@ -32,40 +49,39 @@ md(r"""
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/demo1_super_resolution.ipynb)
 
-**This is the walkthrough the presenter shows** (about 15 minutes). You do not need to run
-it now: watch, and then make an image of a place you know with the short worksheet,
-[`demo1_your_turn.ipynb`](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/demo1_your_turn.ipynb).
-This notebook stays online if you want to go through it later.
+You make a super-resolved image of **a place you know** and judge it yourself, one part at a
+time. We go through the parts together. Each part has the same three beats:
 
-**Part A: how to use the service** (shown in the session)
+| | What | Who |
+|---|---|---|
+| **▶ Look** | Run a one-line cell. Images and controls appear under it. | everyone |
+| **⚙ Under the hood** | A collapsed cell with the code behind what you just saw: the calls to the service, and how it works inside. The presenter opens it on the screen. To open it yourself, double-click its title (or click *Show code*), then run it. | optional |
+| **✎ Your turn** | Explore your own place with the sliders and buttons, and answer one question. | everyone, in pairs |
 
-1. **Search**: which Sentinel-2 images exist for an area and a date? (free)
-2. **Send a job**, and the options you can set.
-3. **The inputs and Stage 1**: 8 images combined into one 2.5 m image, tile by tile.
-4. **Stage 2**: the diffusion step adds detail.
-5. **What comes with every result**: files, quality flags, sources and cost.
+| Part | You look at | Under the hood | Question |
+|---|---|---|---|
+| 1 | Pick a place and send it to the service | the request in code | |
+| 2 | The 8 Sentinel-2 images the model uses | how the service found and chose them | **Q1** How many are really clear? |
+| 3 | Stage 1 next to Sentinel-2 | from 320 m tiles to one image | **Q2** What can you see now that you could not see before? |
+| 4 | Stage 2, the full result | what comes with every result | **Q3** One detail it got right, one it got wrong |
+| 5 | One dial turned, next to the default | the experiment in code, and the two numbers | **Q4** Which version would you use, and for what? |
+| 6 | Your result card | | |
 
-**Part B: going deeper** (for later)
+**You do not need to write code.** Run each grey cell once, from top to bottom, with
+**Shift + Enter** (or the ▶ button). The menus, buttons and sliders under a cell act at once,
+and your answers are saved as you type. You can skip every *Under the hood* cell: nothing
+later depends on them.
 
-6. **The two dials**: how much noise (Dial 1) and how many steps (Dial 2).
-7. **Sharp or truthful?** Measuring what the model adds.
-8. **Near-infrared**: the fourth band, and a vegetation index.
-9. **Checking against real high-resolution images**: colour, near-infrared and NDVI.
-
-**You need** an API key (`srk_...`) and the service URL, both handed out at the workshop.
-Run the cells from top to bottom with **Shift + Enter**. The super-resolution runs on the
-service's GPUs, so Colab needs no GPU. The example area was run before the workshop, so its
-jobs cost nothing; the whole notebook takes about 15 minutes to run.
+**Stuck?** Raise your hand, or carry on with *Cebu City and Mandaue*: every part works with
+it. Sections 7 to 10 are for later.
 """)
 
-md("# Part A: how to use the service\n\n## 0. Setup")
-code(r"""
-%pip install -q "sr-client[geo,viz] @ git+https://github.com/adb-sr/sr-client@v0.1.0"
-""")
-
+md("## 0. Setup\n\nRun the next three cells. The first takes about a minute.")
+code(PIP)
 md(r"""
-Your API key starts with `srk_`. In Colab you can store it under **Secrets** (the key icon
-on the left) as `SR_API_KEY`, and the URL as `SR_API_URL`; otherwise the cell asks for them.
+Your API key starts with `srk_`. The cell asks for the key and the service URL (both are on
+your card). In Colab you can also store them under **Secrets** (the key icon on the left) as
+`SR_API_KEY` and `SR_API_URL`.
 """)
 code(r"""
 import getpass
@@ -92,80 +108,281 @@ me = sr.me()
 print(f"Key {me['prefix']} ({me['owner']}): up to {me['limits']['max_area_km']} km per side, "
       f"${me['budget']['remaining_usd']:.2f} of budget left")
 """)
-
-md(r"""
-The service runs one model, `sen4x-v2`. It has the two stages from the slides, and the
-diffusion step has the two dials: `tau` (τ, how much noise is added, Dial 1) and `nfe`
-(the number of steps, Dial 2).
-""")
-code(r"""
-model = sr.models()[0]
-print(model["name"])
-for stage, what in model["stages"].items():
-    print(f"  stage {stage}: {what}")
-print("dials:", {k: v for k, v in model["params"].items() if k in ("tau", "nfe")})
-""")
-
 code('# @title Helper functions (run this cell; you do not need to read it) { display-mode: "form" }\n'
      + (HERE / "d1_helpers.py").read_text() + "\n\n"
      + as_code("PLACES", {k: {f: v[f] for f in ("lat", "lon", "date", "note")}
                           for k, v in PLACES.items()})
-     + as_code("EXPERIMENTS", EXPERIMENTS), hidden=True)
+     + as_code("EXPERIMENTS", EXPERIMENTS) + "\n\n"
+     + (HERE / "widgets_common.py").read_text() + "\n\n"
+     + (HERE / "d1_widgets.py").read_text(), hidden=True)
 
-md(r"""
-## 1. Search: which Sentinel-2 images are there?
+# ---- part 1 ---------------------------------------------------------------------------------
+md(rf"""
+## 1. Pick a place *(3 minutes)*
 
-`area_around(lat, lon, km)` makes a square around a point. The example is a 2 km square
-over Cebu City and Mandaue. March is in the dry season, so there are few clouds.
+**▶ Look.** Run the cell, choose the place you know best, and press **Send to the service**.
+The service first makes a free **estimate** (which Sentinel-2 images exist around the date,
+and what the job would cost) and then starts the job. All five places were run before the
+workshop, so they come back quickly and cost nothing.
 
-The estimate is free. It shows how many tiles the area needs (squares of 320 m, the size the
-model works on), what it would cost, and
-every Sentinel-2 image the service found. It searches **45 days before and after** the date
-and keeps images with **less than 40 % cloud** over the whole Sentinel-2 tile. (For the
-training data we searched ±180 days, Session 2; a shorter window makes the result describe a
-shorter period. You can change it with `time_window`.)
+| Place | What is there |
+|---|---|
+{place_rows}
+
+Each area is a {AREA_KM} km square. *My own place* is the last entry in the menu: fill in a
+point and a date. It takes a few minutes longer and uses your budget, so start with a listed
+place if you are short of time. If you change the place later, run the cells of parts 2 to 5
+again.
 """)
-code(r"""
-LAT, LON = 10.3300, 123.9200     # Cebu City and Mandaue
-DATE = "2026-03-20"              # dry season
-area = area_around(LAT, LON, km=2)
+code("pick_place(sr)")
+hood("the same request in code", r"""
+LAT, LON, DATE, area, job = picked()          # the place you sent with the button
 
+# what the service offers: one model, two stages, and the dials of Stage 2
+model = sr.models()[0]
+print(model["name"])
+for stage, what in model["stages"].items():
+    print(f"  stage {stage}: {what}")
+print("  dials:", {k: v for k, v in model["params"].items() if k in ("tau", "nfe", "seed")})
+
+# the area is a square around a point: [west, south, east, north]
+print("area:", area_around(LAT, LON, km=2))
+
+# the estimate is free: it searches the Sentinel-2 archive and runs nothing
 est = sr.estimate(area, DATE)
-print(f"{est['tiles']} tiles, about ${est['estimated_usd']:.2f}; "
-      f"{len(est['scenes'])} Sentinel-2 images between {est['search_window'][0]} and "
-      f"{est['search_window'][1]}")
-for w in est["warnings_likely"]:
-    print("warning:", w["message"])
-for p in est["problems"]:
-    print("cannot submit:", p)
+print(f"{est['tiles']} tiles, about ${est['estimated_usd']:.2f}; {len(est['scenes'])} Sentinel-2 "
+      f"images between {est['search_window'][0]} and {est['search_window'][1]}")
+for s in est["scenes"][:5]:
+    print("  ", s["date"][:10], s["id"])
+print("   ...")
+
+# the button then ran:   job = sr.submit(area, DATE)
+print("job", job.id, job.refresh().status)
+
+explain("request")
 """)
+
+# ---- part 2 ---------------------------------------------------------------------------------
+md(r"""
+## 2. The inputs: what did the satellite see? *(7 minutes)*
+
+**▶ Look.** For every 320 m square, the model gets the **8 clearest Sentinel-2 images**
+closest to your date. The cell shows the 8 for the middle of your area, read from the public
+Sentinel-2 archive (this takes about half a minute).
+
+* Pixels outlined in **red** are masked: ESA's classification marks them as cloud, cirrus or
+  shadow. The model fills them from the other images.
+* Image 1 is the **reference**: the result follows its layout and colours.
+* The classification is not perfect. It misses thin cloud and haze, and sometimes masks
+  bright roofs.
+""")
+code("step2_inputs()")
+hood("how the service found and chose these images", r"""
+LAT, LON, DATE, area, job = picked()
+
+# every result comes with a manifest: what was used for each 320 m tile
+m = manifest(job)
+tile = middle_tile(m)                        # the tile shown above
+print(f"{len(m['tiles'])} tiles; the one in the middle:")
+print("  corner (row, col in 10 m pixels):", tile["row"], tile["col"])
+for d, sid in zip(tile["dates"], tile["scene_ids"]):
+    print("  ", d, sid)
+
+# all images the search found, and how cloudy each is over this area
+est = sr.estimate(area, DATE)
+cloudy = cloud_over_area([s["id"] for s in est["scenes"]], area)   # read from the archive
+plot_search(est, m, cloudy, DATE)
+
+explain("search")
+""")
+md(r"""
+**✎ Your turn.** Look at your 8 images above and answer **Q1** in the blue box under them.
+""")
+
+# ---- part 3 ---------------------------------------------------------------------------------
+md(r"""
+## 3. Stage 1: eight images become one *(7 minutes)*
+
+**▶ Look.** Stage 1 combines the 8 images into one image with 2.5 m pixels. It is sharper
+than Sentinel-2 but still soft.
+""")
+code("step3_stage1()")
+hood("from 320 m tiles to one image", r"""
+LAT, LON, DATE, area, job = picked()
+
+# the results are GeoTIFFs; job.open() reads one as an xarray image
+s1 = load(job, "stage1_sr.tif")              # = job.open("stage1_sr.tif"), in reflectance
+lr = load(job, "lr_reference.tif")
+print(f"Sentinel-2 input: {lr.sizes['x']} x {lr.sizes['y']} pixels of {abs(lr.rio.resolution()[0]):g} m")
+print(f"Stage 1:          {s1.sizes['x']} x {s1.sizes['y']} pixels of {abs(s1.rio.resolution()[0]):g} m, "
+      f"{s1.sizes['band']} bands, {s1.rio.crs}")
+
+# the tiles the model worked on, drawn on the Stage 1 image
+show_tiles(manifest(job), s1)
+
+explain("tiles")
+""")
+md(r"""
+**✎ Your turn.** Use the **sliders** above to move to a spot you know: a street you walk,
+your office, a market, a field. The small picture on the left shows where you are in the
+area; the **Zoom** buttons change how much you see. Then answer **Q2**.
+""")
+
+# ---- part 4 ---------------------------------------------------------------------------------
+md(r"""
+## 4. Stage 2: the model adds detail *(8 minutes)*
+
+**▶ Look.** Stage 2 adds noise to the Stage 1 image and removes it step by step. While it
+removes the noise, it draws small details the way it learned them from 1.8 million real
+high-resolution images. The result looks sharp. Some of that detail is real, and some is only
+*plausible*.
+""")
+code("step4_stage2()")
+hood("what comes with every result", r"""
+LAT, LON, DATE, area, job = picked()
+job.wait(quiet=True)                         # until both stages are done
+
+# the quality map: where the result has no data or rests on few different images
+validity = job.open("validity.tif", reflectance=False).load()
+show_validity(validity)
+
+m = manifest(job)
+print("warnings:", [w["code"] for w in job.warnings] or "none")
+print("model:   ", m["model"])
+print("cost:    ", m["cost"])
+print(m["attribution"])
+
+# the files, to open in QGIS or ArcGIS
+paths = job.download("sr_results")
+for name, path in paths.items():
+    print(f"  {path}  ({path.stat().st_size / 1e6:.1f} MB)")
+
+explain("result")
+""")
+md(r"""
+**✎ Your turn.** You know this place, so you can tell real detail from invented detail. Move
+the view above and look for:
+
+* something Stage 2 shows **correctly** (a road that is really there, the shape of a building
+  you know);
+* something that is **wrong or invented** (a roof pattern that does not exist, a road that
+  ends nowhere, a building that became trees).
+
+Then answer **Q3**.
+""")
+
+# ---- part 5 ---------------------------------------------------------------------------------
+md(r"""
+## 5. One experiment: turn a dial *(10 minutes)*
+
+**▶ Look.** Stage 2 has the two dials from Session 2:
+
+* **Dial 1, `tau`**: how much noise is added, from 0 (Stage 1 only) to 999 (almost only
+  noise). More noise lets the model draw more of its own detail. The default is 250. (The
+  noise experiments keep the default 250 steps, so only one dial changes.)
+* **Dial 2, `nfe`**: in how many steps the noise is removed. Fewer steps are faster and
+  cheaper, and less sharp.
+* The noise is random. The **seed** fixes it: another seed gives another version of the
+  invented detail, while everything that was measured stays the same.
+
+Choose **one** experiment in the menu; other pairs will choose others, and we compare at the
+end. Click what you expect, then press **Run my experiment**. A setting that was run before
+comes back at once; a new one takes about 4 minutes.
+
+The result shows the default image, yours, and **where the two differ** (bright = large
+difference). If your experiment was the other seed, that third picture is a map of where the
+model invented detail. Under the pictures are two numbers for each version: *agreement with
+Sentinel-2* (1 = same pattern as the satellite measured) and *fine detail* (higher =
+sharper).
+""")
+code("step5_experiment()")
+hood("the experiment in code, and the two numbers", r"""
+LAT, LON, DATE, area, job = picked()
+name, trial = my_experiment()                # the experiment you ran with the button
+
+# an experiment is the same request with other options
+print(f"{name}:  sr.submit(area, DATE, **{EXPERIMENTS[name]})")
+for label, j in (("default", job), (name, trial)):
+    p, cost = j.refresh().info["params"], j.info["cost"]["actual_usd"] or 0
+    print(f"  {label:<30} tau {p.get('tau', 250)}, steps {p.get('nfe') or p.get('tau', 250)}, "
+          f"seed {p.get('seed', 0)}, cost ${cost:.3f} ($0 if it was computed before)")
+
+# the two numbers under the pictures
+lr = load(job, "lr_reference.tif")
+for label, j in (("default", job), (name, trial)):
+    s2 = load(j, "stage2_sr.tif")            # agreement() first averages it back to 10 m
+    print(f"  {label:<30} agreement with Sentinel-2 {agreement(s2, lr):.2f}   "
+          f"fine detail {detail(s2):.4f}")
+
+explain("dials")
+""")
+md(r"""
+**✎ Your turn.** Move the view above to compare the two versions at a spot you know. Then
+run the next cell and answer **Q4**.
+""")
+code("step5_question()")
+
+# ---- part 6 ---------------------------------------------------------------------------------
+md(r"""
+## 6. Your result card *(5 minutes)*
+
+Run the cell. If you change an answer afterwards, press **Update the card**. Enter your
+answers in the poll (the link is on the slide), and be ready to say in one sentence what you
+found at your place.
+""")
+code("result_card()")
 
 md(r"""
-## 2. Send a job, and the options
+---
+# For later
 
-`sr.submit(area, date)` sends the job. Both stages run by default; stage 1 is published
-first, after about a minute. Everything else is optional:
+## 7. If you have time
 
-| Option | Default | What it does |
-|---|---|---|
-| `stages` | `["1", "2"]` | `["1"]` is fast and cheap; add Stage 2 later with `job.upgrade()` |
-| `time_window` | 45 days before and after | how far from the date the search may go |
-| `max_cloud` | 40 | skip images with more cloud than this (%, whole Sentinel-2 tile) |
-| `tau` | 250 | Dial 1: how much noise Stage 2 adds (10 to 999) |
-| `nfe` | same as `tau` | Dial 2: in how many steps the noise is removed |
-| `seed` | 0 | the random noise; same inputs and same seed give the same image |
-
-Example: `sr.submit(area, DATE, tau=500, seed=1)`.
-
-We send the job now and look at the inputs while it runs. We also start the experiments for
-Part B (the dials) in the background: seven small jobs over a 1 km square in the middle of
-the area. They wait in the queue behind the main job.
+**Near-infrared and vegetation.** The model also sharpens the near-infrared band, which our
+eyes cannot see. Plants reflect a lot of it. The false-colour image shows near-infrared as
+red; NDVI turns it into a vegetation index (green = dense vegetation).
 """)
 code(r"""
-job = sr.submit(area, DATE)     # stage 1 + stage 2 with the default dials (tau = nfe = 250)
-print("job", job.id, job.status)
+LAT, LON, DATE, area, job = picked()
+lr, s2 = load(job, "lr_reference.tif"), load(job, "stage2_sr.tif")
+show([view(lr, LAT, LON, 1000), view(s2, LAT, LON, 1000)],
+     ["Sentinel-2, false colour", "Stage 2, false colour"], bands=(4, 1, 2), ceiling=0.45,
+     size=5.5)
+fig, axes = plt.subplots(1, 2, figsize=(11, 5))
+for ax, (title, da) in zip(axes, [("Sentinel-2, 10 m", lr), ("Stage 2, 2.5 m", s2)]):
+    im = ax.imshow(view(ndvi(da), LAT, LON, 1000).values, cmap="RdYlGn", vmin=-0.2, vmax=0.8,
+                   interpolation="nearest")
+    ax.set_title(f"NDVI, {title}")
+    ax.axis("off")
+fig.colorbar(im, ax=axes, shrink=0.8)
+plt.show()
+""")
+md(r"""
+**Another place, another dial.** In part 1, choose another place (or *My own place*) and
+press the button again, then run the cells of parts 2 to 5 again. Or choose another
+experiment in part 5 and press its button. Tips for your own place:
 
-SMALL = area_around(LAT, LON, km=1)
+* pick a dry-season date (in Luzon, December to May) so there are enough clear images;
+* near the coast you will get the `water` warning: the sea and reefs are not reliable;
+* the area is a 2 km square around your point.
+
+**Take the images home.** The *Under the hood* cell of part 4 downloads the files of your
+job. They open in QGIS or ArcGIS.
+
+---
+# Going deeper
+
+Sections 8 to 10 take one example further: all dial settings side by side, the trade-off
+between sharp and truthful as a chart, and a check against real 1 m images. They use Cebu
+City and Mandaue, whose jobs were run before the workshop, and take about 15 minutes to run.
+They are written as plain code, without buttons.
+
+The next cell starts seven small jobs in the background: a 1 km square in the middle of the
+Cebu area, each with another setting of the dials.
+""")
+code(r"""
+B_LAT, B_LON, B_DATE = (PLACES["Cebu City and Mandaue"][k] for k in ("lat", "lon", "date"))
+SMALL = area_around(B_LAT, B_LON, km=1)
 DIALS = {
     "tau 100":            dict(tau=100),
     "tau 250":            dict(tau=250),
@@ -175,207 +392,20 @@ DIALS = {
     "tau 250, 50 steps":  dict(tau=250, nfe=50),
     "tau 250, seed 1":    dict(tau=250, seed=1),
 }
-sweep = Sweep({name: (SMALL, DATE, p) for name, p in DIALS.items()})
+sweep = Sweep({name: (SMALL, B_DATE, p) for name, p in DIALS.items()})
 """)
 
 md(r"""
-## 3. The inputs, and Stage 1
+## 8. The two dials, side by side
 
-As soon as stage 1 is ready, the job's manifest lists which Sentinel-2 images were used for
-each tile. Below, each dot is one image that the search found. The height of a dot is **how
-much of our area is under cloud or cloud shadow in that image**, according to ESA's scene
-classification. Blue dots were used, and **the larger the dot, the more of the area it was
-used for**. Grey rings were not used.
-
-**Why are some images with a lot of cloud used?** The model does not work on the whole area
-at once but on tiles of 320 m (more on this below), and the images are chosen for each tile
-separately. An image that is cloudy over most of the area can still be clear over a few
-tiles, and it is used only there: its dot is small.
-
-(The search in section 1 filters on the cloud cover of the whole Sentinel-2 tile, 110 km
-across. That number says little about a 2 km area, so we do not plot it here. Cebu also
-lies where two Sentinel-2 tiles overlap, so most satellite passes were found twice; their
-dots lie on top of each other.)
-""")
-code(r"""
-wait_for_stage(job, "1")
-m = manifest(job)
-
-target = date.fromisoformat(DATE)
-cloudy = cloud_over_area([s["id"] for s in est["scenes"]], area)   # read from the archive
-n_tiles = {s["id"]: sum(s["id"] in t["scene_ids"] for t in m["tiles"]) for s in est["scenes"]}
-
-fig, ax = plt.subplots(figsize=(10, 3.4))
-for s in est["scenes"]:
-    d = (date.fromisoformat(s["date"][:10]) - target).days
-    share = n_tiles[s["id"]] / len(m["tiles"])
-    if share:
-        ax.scatter(d, 100 * cloudy[s["id"]], s=20 + 160 * share, color="#007DB7", alpha=0.85,
-                   zorder=3)
-    else:
-        ax.scatter(d, 100 * cloudy[s["id"]], s=60, color="none", edgecolors="grey", zorder=2)
-ax.axvline(0, color="k", ls=":")
-ax.set_ylim(-8, 105)
-ax.set_xlabel(f"days from {DATE}")
-ax.set_ylabel("cloud and shadow\nover our area (%)")
-ax.set_title(f"{len(est['scenes'])} images found, {sum(v > 0 for v in n_tiles.values())} used "
-             f"(blue; larger = used for more of the {len(m['tiles'])} tiles)")
-plt.show()
-""")
-
-md(r"""
-### The 8 images behind one place
-
-For each 320 m tile the model gets 8 images, the clearest and closest in time. Here are the 8
-for the tile in the middle of the area (500 m around it), read straight from the public
-Sentinel-2 archive.
-
-* Pixels outlined in red are **masked**: ESA's scene classification marks them as cloud,
-  cirrus or shadow. They are filled from the other images. The classification misses some
-  thin clouds and haze; look for them.
-* Image 1 is the **reference**: the output follows its geometry and colours.
-* If there are fewer than 8 different clear images, some are used twice (marked "repeat").
-""")
-code(r"""
-# the tile nearest the middle of the area (row/col: its corner, in 10 m pixels; 32 px wide)
-mid_r, mid_c = m["grid"]["height"] / 2, m["grid"]["width"] / 2
-tile = min(m["tiles"], key=lambda t: (t["row"] + 16 - mid_r) ** 2 + (t["col"] + 16 - mid_c) ** 2)
-scenes = scene_images(tile["scene_ids"], LAT, LON, km=0.5)
-
-fig, axes = plt.subplots(1, len(scenes), figsize=(2.3 * len(scenes), 2.8))
-for i, (ax, (sid, img, masked), d) in enumerate(zip(axes, scenes, tile["dates"]), 1):
-    ax.imshow(img)
-    if masked.any():
-        ax.contour(masked, levels=[0.5], colors="red", linewidths=0.8)
-    days = (date.fromisoformat(d) - target).days
-    note = " (reference)" if i == 1 else " (repeat)" if sid in tile["scene_ids"][:i - 1] else ""
-    ax.set_title(f"{i}{note}\n{days:+d} days", fontsize=9)
-    ax.axis("off")
-plt.tight_layout()
-plt.show()
-""")
-
-md(r"""
-### Stage 1: 8 images combined into one
-
-Stage 1 combines the 8 images into one image with 2.5 m pixels. It is sharper than one
-Sentinel-2 image, but still blurry. `lr_reference.tif` is the Sentinel-2 input on the same
-area: the per-pixel average of the images the model saw, at 10 m.
-""")
-code(r"""
-lr = load(job, "lr_reference.tif")
-s1 = load(job, "stage1_sr.tif")
-
-show([clip(lr, LAT, LON, 0.6), clip(s1, LAT, LON, 0.6)],
-     ["Sentinel-2, 10 m", "Stage 1, 2.5 m"], size=5.5)
-""")
-
-md(r"""
-### From tiles to one image
-
-The model always works on squares of **320 m** (32 Sentinel-2 pixels). A larger area is cut
-into such tiles, and each tile goes through the model on its own, with its own 8 images.
-The service then **stitches** the results into one image:
-
-* neighbouring tiles **overlap by 80 m**. In the overlap, one result fades into the other,
-  so there is no hard edge;
-* the **colours of neighbouring tiles are matched**, because two tiles may have used
-  different images;
-* a tile with no clear image at all stays empty: such gaps appear as black squares.
-
-On the left, the outlines of all tiles on the Stage 1 image, with two neighbours in yellow
-and blue. On the right, how many different images each tile had. Tiles with fewer different
-images hold less real detail (the model then uses some images twice).
-""")
-code(r"""
-show_tiles(m, s1)
-""")
-
-md(r"""
-## 4. Stage 2: the diffusion step adds detail
-
-Stage 2 adds noise to the Stage 1 image and then removes it step by step. While removing the
-noise, the model draws the small details it learned from 1.8 million high-resolution images
-(Session 2).
-""")
-code(r"""
-job.wait()
-s2 = load(job, "stage2_sr.tif")
-job.show()     # the whole 2 km area, both stages
-""")
-code(r"""
-show([clip(lr, LAT, LON, 0.5), clip(s1, LAT, LON, 0.5), clip(s2, LAT, LON, 0.5)],
-     ["Sentinel-2, 10 m", "Stage 1", "Stage 2"], size=4.6, suptitle="500 m in the middle")
-""")
-
-md(r"""
-## 5. What comes with every result
-
-Every job returns the images and the information you need to judge them:
-
-| File | What it holds |
-|---|---|
-| `stage1_sr.tif`, `stage2_sr.tif` | the 2.5 m images: red, green, blue, NIR; reflectance × 10,000 |
-| `lr_reference.tif` | the Sentinel-2 input, 10 m |
-| `validity.tif` | 0 no data · 1 valid · 2 low diversity (fewer than 4 different clear images) |
-| `manifest.json` | the images used for every tile, the settings, model versions, cost |
-
-**Warnings** never stop a job, but read them: `water` (super-resolution erases detail in
-shallow water and reefs; use the Sentinel-2 input there), `low_diversity`, `nodata` and
-`haze`.
-""")
-code(r"""
-validity = job.open("validity.tif", reflectance=False).load()
-fig, ax = plt.subplots(figsize=(5, 5))
-ax.imshow(validity.values[0], cmap=plt.matplotlib.colors.ListedColormap(
-    ["black", "#cfe8f3", "orange"]), vmin=0, vmax=2, interpolation="nearest")
-ax.set_title("validity: black no data, blue valid, orange low diversity")
-ax.axis("off")
-plt.show()
-
-print("warnings:", [w["code"] for w in job.warnings] or "none")
-print("model:", m["model"])
-print("cost:", m["cost"])
-print(m["attribution"])
-""")
-
-md(r"""
-Download the files to open them in QGIS or ArcGIS. In Colab they appear in the file browser
-on the left, under `sr_results/<job id>/`. Links last 7 days; the files are kept for 30
-days.
-""")
-code(r"""
-paths = job.download("sr_results")
-for name, path in paths.items():
-    print(f"  {path}  ({path.stat().st_size / 1e6:.1f} MB)")
-print(f"budget left: ${sr.me()['budget']['remaining_usd']:.2f}")
-""")
-
-md(r"""
-## Your turn
-
-That is the whole service: an area and a date in, images and their quality information out.
-Now open the worksheet and make an image of a place you know:
-[`demo1_your_turn.ipynb`](https://colab.research.google.com/github/adb-sr/sr-client/blob/main/notebooks/demo1_your_turn.ipynb).
-
----
-# Part B: going deeper
-
-The rest of this notebook is for later. It uses the jobs that were started in the background
-in section 2.
-""")
-
-md(r"""
-## 6. The two dials
-
-The seven background jobs from section 2 should be done or nearly done. When they are, the
-cell starts three more for section 9 in the background.
+The cell waits for the seven jobs started above. When they are done, it starts three more for
+section 10 in the background.
 """)
 code(r"""
 sweep.status()
 dial_jobs = sweep.wait()
 
-# section 9: one job per real high-resolution image, on the day it was taken (1 km each)
+# section 10: one job per real high-resolution image, on the day it was taken (1 km each)
 CHECKS = {
     "Ningbo, China: houses, gardens and greenhouses": "20220808_022419_SN18_51N_361530_3312762",
     "near Yangon, Myanmar: factories":                "20221106_044416_SN27_47N_204846_1870691",
@@ -399,7 +429,7 @@ small["Stage 1"] = load(dial_jobs["tau 250"], "stage1_sr.tif")
 lr_small = load(dial_jobs["tau 250"], "lr_reference.tif")
 
 order = ["Stage 1", "tau 100", "tau 250", "tau 500", "tau 999"]
-show([clip(small[k], LAT, LON, 0.25) for k in order],
+show([clip(small[k], B_LAT, B_LON, 0.25) for k in order],
      ["τ = 0 (Stage 1 only)", "τ = 100", "τ = 250", "τ = 500", "τ = 999"], size=3.2,
      suptitle="Dial 1: 250 m in the middle")
 """)
@@ -413,7 +443,7 @@ steps.
 """)
 code(r"""
 order = ["Stage 1", "tau 250, 10 steps", "tau 250, 50 steps", "tau 250"]
-show([clip(small[k], LAT, LON, 0.25) for k in order],
+show([clip(small[k], B_LAT, B_LON, 0.25) for k in order],
      ["Stage 1", "10 steps", "50 steps", "250 steps"], size=3.6,
      suptitle="Dial 2 at τ = 250: 250 m in the middle")
 
@@ -423,7 +453,7 @@ for name, j in dial_jobs.items():
 """)
 
 md(r"""
-## 7. Sharp or truthful?
+## 9. Sharp or truthful?
 
 Session 2 showed the trade-off: more detail, but the detail is less certain. We can measure
 both sides on our own images:
@@ -471,10 +501,10 @@ detail**.
 code(r"""
 a, b = small["tau 250"], small["tau 250, seed 1"]
 diff = np.abs(a.sel(band=[1, 2, 3]) - b.sel(band=[1, 2, 3])).mean("band")
-show([clip(a, LAT, LON, 0.25), clip(b, LAT, LON, 0.25)], ["seed 0", "seed 1"], size=4.6)
+show([clip(a, B_LAT, B_LON, 0.25), clip(b, B_LAT, B_LON, 0.25)], ["seed 0", "seed 1"], size=4.6)
 
 fig, ax = plt.subplots(figsize=(4.6, 4.6))
-ax.imshow(clip(diff, LAT, LON, 0.25).values, cmap="magma",
+ax.imshow(clip(diff, B_LAT, B_LON, 0.25).values, cmap="magma",
           vmin=0, vmax=0.05)
 ax.set_title("difference between the seeds")
 ax.axis("off")
@@ -490,29 +520,10 @@ and between buildings. Use super-resolved images
 for questions about areas, and do not trust a single small object without checking it
 (Session 3).
 
-## 8. Near-infrared: the fourth band
-
-The model also sharpens the near-infrared band (NIR), which our eyes cannot see. Healthy
-plants reflect a lot of NIR, so it is useful for vegetation. A false-colour image shows NIR as
-red, and NDVI = (NIR − red) / (NIR + red) turns it into a vegetation index.
-""")
-code(r"""
-show([clip(lr, LAT, LON, 1), clip(s2, LAT, LON, 1)],
-     ["Sentinel-2, false colour", "Stage 2, false colour"], bands=(4, 1, 2), ceiling=0.45,
-     size=5.5)
-
-fig, axes = plt.subplots(1, 2, figsize=(11, 5))
-for ax, (title, da) in zip(axes, [("Sentinel-2, 10 m", lr), ("Stage 2, 2.5 m", s2)]):
-    im = ax.imshow(clip(ndvi(da), LAT, LON, 1).values,
-                   cmap="RdYlGn", vmin=-0.2, vmax=0.8, interpolation="nearest")
-    ax.set_title(f"NDVI, {title}")
-    ax.axis("off")
-fig.colorbar(im, ax=axes, shrink=0.8)
-plt.show()
 """)
 
 md(r"""
-## 9. Checking against real high-resolution images
+## 10. Checking against real high-resolution images
 
 So far we compared the results with Sentinel-2, which cannot show anything smaller than
 10 m. To check the 2.5 m detail itself we need a real high-resolution image of the same place
@@ -521,7 +532,7 @@ on the same day.
 [Satellogic EarthView](https://registry.opendata.aws/satellogic-earthview/) is a free archive
 of 1 m images (red, green, blue and NIR, CC BY 4.0). Its images are the kind the model learned
 from, but **these three were held out of training**: the model has never seen them or
-anything within their 384 m squares. Section 6 started one 1 km job around each, for the day
+anything within their 384 m squares. Section 8 started one 1 km job around each, for the day
 the image was taken.
 
 To compare fairly:
@@ -573,7 +584,7 @@ md(r"""
   0.64 for Sentinel-2).
 * **Stage 2 looks the most like the real image, but its detail is less often in the right
   place.** It scores below Stage 1, though still above Sentinel-2 in most cases. This is
-  section 7 again: the diffusion step draws detail that is *plausible*, not detail that was
+  section 9 again: the diffusion step draws detail that is *plausible*, not detail that was
   *measured*.
 * For maps where every pixel counts (measuring, change detection), Stage 1 is the safer
   choice; for looking and for models trained on real high-resolution images (Session 3),

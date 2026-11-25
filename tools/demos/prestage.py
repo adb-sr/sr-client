@@ -4,8 +4,8 @@ them back from the cache quickly and at no cost.
     export SR_API_KEY=srk_... SR_API_URL=https://...
     python tools/demos/prestage.py                  # free estimates for the five places
     python tools/demos/prestage.py --run            # main job of each place
-    python tools/demos/prestage.py --run --all      # + the worksheet experiments and the
-                                                    #   walkthrough's dial and check jobs
+    python tools/demos/prestage.py --run --all      # + the Demo 1 experiments and the
+                                                    #   dial and check jobs of its last part
     python tools/demos/prestage.py --run --download DIR   # also save the main jobs' files
 
 Jobs are sent one after another and the script waits whenever the key's queue is full.
